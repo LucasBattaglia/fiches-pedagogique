@@ -522,7 +522,7 @@ PYTHON);
 
         // Tableau des séances
         $seancesRows = array_map(fn($s, $i) => [
-            (string)($s['position_in_seq'] ?? $s['numero'] ?? $i + 1),
+            (string)(($s['position_in_seq'] . " - " . $s['titre']) ?? ($s['numero'] . " - " . $s['titre']) ?? ($i + 1 . " - " . $s['titre'])),
             $s['objectif_intermediaire'] ?? $s['objectif_general'] ?? '',
             ($s['duree'] ?? '') ? $s['duree'] . ' min' : '',
         ], $seances, array_keys($seances));
