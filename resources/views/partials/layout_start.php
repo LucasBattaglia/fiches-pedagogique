@@ -86,6 +86,14 @@ $activeNav = $activeNav ?? '';
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 Mon profil
             </a>
+
+            <?php if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())){ ?>
+            <a href="<?= $base ?>/admin/programmes"
+               style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;color:<?= $activeNav==='profil'?'white':'rgba(255,255,255,.7)' ?>;background:<?= $activeNav==='profil'?'rgba(255,255,255,.12)':'transparent' ?>;text-decoration:none;font-size:.88rem;margin-bottom:2px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Gestion des programmes
+            </a>
+            <?php } ?>
         </nav>
 
         <!-- Footer utilisateur -->

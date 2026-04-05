@@ -104,4 +104,10 @@ class UserDAO
     {
         return $this->findByEmail($email) !== null;
     }
+
+    public function isAdmin($uid): bool
+    {
+        $user = $this->findById($uid);
+        return $user ? (bool)$user['is_admin'] : false;
+    }
 }

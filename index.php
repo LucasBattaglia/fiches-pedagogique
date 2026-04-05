@@ -68,10 +68,6 @@ $method   = $_SERVER['REQUEST_METHOD'];
 $uri      = strtok($_SERVER['REQUEST_URI'], '?');
 $uri      = rtrim($uri, '/') ?: '/';
 
-// Supporte installation dans un sous-dossier WAMP (ex: /fiches-pedagogiques/)
-// Détection automatique du sous-dossier à partir du script courant
-// Détection du sous-dossier (vide si VirtualHost, sinon /fiches-pedagogiques par ex.)
-// Avec un VirtualHost, SCRIPT_NAME = /index.php donc dirname = '/'
 $_BASE = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 if ($_BASE === '.' || $_BASE === '\\') $_BASE = '';
 if ($_BASE !== '' && str_starts_with($uri, $_BASE)) {
@@ -79,7 +75,6 @@ if ($_BASE !== '' && str_starts_with($uri, $_BASE)) {
 }
 $uri = $uri ?: '/';
 
-// Définir la fonction url() pour générer des URLs avec le bon préfixe
 function url(string $path = ''): string {
     global $_BASE;
     return $_BASE . '/' . ltrim($path, '/');
@@ -239,7 +234,6 @@ match(true) {
     $uri === '/sequence/create' && $method === 'POST' => (function() {
         requireLogin();
         $data = $_POST;
-        // Convertir les champs integer : '' → null pour PostgreSQL
         $data['cycle_id']              = nullInt($_POST['cycle_id']              ?? null);
         $data['classe_id']             = nullInt($_POST['classe_id']             ?? null);
         $data['matiere_id']            = nullInt($_POST['matiere_id']            ?? null);
@@ -268,20 +262,17 @@ match(true) {
         foreach ($seances as $s) {
             $sitsBySeance[$s['id']] = \src\DAO\SituationDAO::getInstance()->findBySeance($s['id']);
         }
-        // Items programme liés
         $progItems = [];
         if (!empty($seq['programme_items'])) {
             $allItems = \src\DAO\ProgrammeDAO::getInstance()->getItemsFlat($seq['programme_version_id'] ?? 0);
             $ids = $seq['programme_items'];
             $progItems = array_filter($allItems, fn($i) => in_array($i['id'], $ids));
         }
-        // Toutes les séances disponibles pour le modal "ajouter séance existante"
         $seancesDisponibles = [];
         if ($uid) {
             try {
                 $toutesSeances = \src\DAO\SeanceDAO::getInstance()->findAll(500);
                 $seanceIdsDejaLiees = array_column($seances, 'id');
-                // Exclure aussi celles liées via la table N-N si elle existe
                 try {
                     $st2 = \src\DAO\ConnectionPool::getConnection()->prepare(
                         'SELECT seance_id FROM sequence_seances WHERE sequence_id = :sid'
@@ -289,7 +280,7 @@ match(true) {
                     $st2->execute(['sid' => $id]);
                     $liees2 = array_column($st2->fetchAll(), 'seance_id');
                     $seanceIdsDejaLiees = array_unique(array_merge($seanceIdsDejaLiees, $liees2));
-                } catch (\Exception $e) { /* table N-N pas encore créée */ }
+                } catch (\Exception $e) {}
                 $seancesDisponibles = array_values(array_filter(
                     $toutesSeances,
                     fn($s2) => !in_array($s2['id'], $seanceIdsDejaLiees)
@@ -402,7 +393,6 @@ match(true) {
     $uri === '/seance/create' && $method === 'POST' => (function() {
         requireLogin();
         $seqId = ($_POST['sequence_id'] ?? '') !== '' ? (int)$_POST['sequence_id'] : null;
-        // Si séquence liée, vérifier ownership
         if ($seqId && !\src\DAO\SequenceDAO::getInstance()->isOwner($seqId, currentUserId())) {
             http_response_code(403); return;
         }
@@ -419,7 +409,6 @@ match(true) {
     preg_match('#^/seance/(\d+)/show$#', $uri, $m) && $method === 'GET' => (function() use ($m) {
         $seance = \src\DAO\SeanceDAO::getInstance()->findById((int)$m[1]);
         if (!$seance) { http_response_code(404); view('errors/404'); return; }
-        // from_seq = séquence depuis laquelle on arrive (contexte de navigation)
         $fromSeqId = ($_GET['from_seq'] ?? '') !== '' ? (int)$_GET['from_seq'] : null;
         if ($fromSeqId) {
             $sequence = \src\DAO\SequenceDAO::getInstance()->findById($fromSeqId);
@@ -487,7 +476,6 @@ match(true) {
         }
     })(),
 
-    // Ajouter une séance existante à une séquence (depuis la page séquence)
     preg_match('#^/sequence/(\d+)/add-seance$#', $uri, $m) && $method === 'POST' => (function() use ($m) {
         requireLogin();
         $seqId    = (int)$m[1];
@@ -496,7 +484,6 @@ match(true) {
             http_response_code(403); return;
         }
         if ($seanceId) {
-            // Créer la table N-N si elle n'existe pas encore (migration auto)
             try {
                 \src\DAO\ConnectionPool::getConnection()->exec('
                     CREATE TABLE IF NOT EXISTS sequence_seances (
@@ -506,7 +493,6 @@ match(true) {
                         PRIMARY KEY (sequence_id, seance_id)
                     )
                 ');
-                // Migrer les liens existants si table vide
                 $count = \src\DAO\ConnectionPool::getConnection()
                     ->query('SELECT COUNT(*) FROM sequence_seances')->fetchColumn();
                 if ((int)$count === 0) {
@@ -535,9 +521,9 @@ match(true) {
 
     preg_match('#^/seance/(\d+)/position$#', $uri, $m) && $method === 'POST' => (function() use ($m) {
         requireLogin();
-        $seanceId  = (int)$m[1];
+        $seanceId   = (int)$m[1];
         $sequenceId = (int)($_POST['sequence_id'] ?? 0);
-        $position  = max(1, (int)($_POST['position'] ?? 1));
+        $position   = max(1, (int)($_POST['position'] ?? 1));
         if ($sequenceId && \src\DAO\SequenceDAO::getInstance()->isOwner($sequenceId, currentUserId())) {
             \src\DAO\SeanceDAO::getInstance()->setPositionInSequence($seanceId, $sequenceId, $position);
         }
@@ -660,13 +646,12 @@ match(true) {
         if ($sit) {
             $seanceId = $sit['seance_id'];
             $seance   = $seanceId ? \src\DAO\SeanceDAO::getInstance()->findById($seanceId) : null;
-            // Vérifier ownership : soit via séquence, soit séance autonome
             $canDelete = false;
             if ($seance && $seance['sequence_id']) {
                 $seq = \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']);
                 $canDelete = $seq && $seq['user_id'] === currentUserId();
             } else {
-                $canDelete = true; // séance autonome, pas de vérification stricte
+                $canDelete = true;
             }
             if ($canDelete) \src\DAO\SituationDAO::getInstance()->delete((int)$m[1]);
         }
@@ -699,7 +684,7 @@ match(true) {
         ]);
     })(),
 
-    // ---- PROGRAMMES (référentiel) ----
+    // ---- PROGRAMMES (référentiel public) ----
     $uri === '/programmes' && $method === 'GET' => (function() {
         $versions = \src\DAO\ProgrammeDAO::getInstance()->getAllVersionsGrouped();
         view('programmes', ['versions' => $versions]);
@@ -723,9 +708,9 @@ match(true) {
     // ---- CHANGEMENT MDP ----
     $uri === '/profil/password' && $method === 'POST' => (function() {
         requireLogin();
-        $uid = currentUserId();
-        $old = $_POST['old_password'] ?? '';
-        $new = $_POST['new_password'] ?? '';
+        $uid     = currentUserId();
+        $old     = $_POST['old_password'] ?? '';
+        $new     = $_POST['new_password'] ?? '';
         $confirm = $_POST['confirm_password'] ?? '';
         if ($new !== $confirm) { flash('error', 'Les mots de passe ne correspondent pas.'); redirect(url('profil')); }
         if (strlen($new) < 8)  { flash('error', 'Mot de passe trop court (8 caractères min).'); redirect(url('profil')); }
@@ -765,8 +750,6 @@ match(true) {
     // ---- GOOGLE OAUTH POUR PDF (refresh token) ----
     $uri === '/auth/google/init' && $method === 'GET' => (function() {
         requireLogin();
-        $user = \src\Service\AuthService::currentUser();
-        //if (!$user['admin']) { http_response_code(403); return; }
         (new \src\Service\GoogleAuthService())->redirect();
     })(),
 
@@ -774,32 +757,138 @@ match(true) {
         (new \src\Service\GoogleAuthService())->callback();
     })(),
 
-    // ---- ADMIN PROGRAMMES ----
+    // ════════════════════════════════════════════════════════════════
+    //  ADMIN PROGRAMMES
+    // ════════════════════════════════════════════════════════════════
+
+    // Page principale admin — triée Cycle > Année > Matière > Classe
     $uri === '/admin/programmes' && $method === 'GET' => (function() {
-        requireLogin(); // Idéalement requireAdmin();
-        $versions = \src\DAO\ProgrammeDAO::getInstance()->getAllVersionsGrouped();
-        view('admin/programmes/index', ['versions' => $versions]);
+        requireLogin();
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            $dao = \src\DAO\ProgrammeDAO::getInstance();
+            $versions = $dao->getAllVersionsAdmin();   // toutes versions, y compris archivées
+            $cycles = $dao->getCycles();
+            $matieres = $dao->getMatieres();
+            view('admin/programmes/index', [
+                'versions' => $versions,
+                'cycles' => $cycles,
+                'matieres' => $matieres,
+            ]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
     })(),
 
+    // Éditeur arbre d'items pour une version
     preg_match('#^/admin/programmes/version/(\d+)$#', $uri, $m) && $method === 'GET' => (function() use ($m) {
         requireLogin();
-        $dao = \src\DAO\ProgrammeDAO::getInstance();
-        $version = $dao->getVersionById((int)$m[1]);
-        $tree = $dao->getItemsTree((int)$m[1]);
-        view('admin/programmes/edit_tree', ['version' => $version, 'tree' => $tree]);
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            $dao = \src\DAO\ProgrammeDAO::getInstance();
+            $version = $dao->getVersionById((int)$m[1]);
+            $tree = $dao->getItemsTree((int)$m[1]);
+            view('admin/programmes/edit_tree', ['version' => $version, 'tree' => $tree]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
     })(),
 
+    // ── API admin : PATCH programme_versions (label, annee_entree, notes, en_vigueur…) ──
+    $uri === '/api/admin/programme-versions' && $method === 'POST' => (function() {
+        requireLogin();
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            $data = json_decode(file_get_contents('php://input'), true) ?? [];
+            if (empty($data['id'])) {
+                jsonResponse(['ok' => false, 'error' => 'id manquant'], 400);
+            }
+            $id = (int)$data['id'];
+            unset($data['id']);
+            \src\DAO\ProgrammeDAO::getInstance()->patchVersion($id, $data);
+            jsonResponse(['ok' => true]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
+    })(),
+
+    // ── API admin : CRÉER une version de programme ──
+    $uri === '/api/admin/programme-versions/create' && $method === 'POST' => (function() {
+        requireLogin();
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            $data = json_decode(file_get_contents('php://input'), true) ?? [];
+            if (empty($data['label']) || empty($data['cycle_id']) || empty($data['matiere_id']) || empty($data['annee_entree'])) {
+                jsonResponse(['ok' => false, 'error' => 'Champs obligatoires manquants'], 400);
+            }
+            $id = \src\DAO\ProgrammeDAO::getInstance()->createVersion($data);
+            jsonResponse(['ok' => true, 'id' => $id]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
+    })(),
+
+    // ── API admin : SUPPRIMER une version de programme ──
+    preg_match('#^/api/admin/programme-versions/(\d+)/delete$#', $uri, $m) && $method === 'POST' => (function() use ($m) {
+        requireLogin();
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            \src\DAO\ProgrammeDAO::getInstance()->deleteVersion((int)$m[1]);
+            jsonResponse(['ok' => true]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
+    })(),
+
+    // ── API admin : PATCH matière (label, code) ──
+    $uri === '/api/admin/matieres' && $method === 'POST' => (function() {
+        requireLogin();
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            $data = json_decode(file_get_contents('php://input'), true) ?? [];
+            if (empty($data['id'])) {
+                jsonResponse(['ok' => false, 'error' => 'id manquant'], 400);
+            }
+            $id = (int)$data['id'];
+            unset($data['id']);
+            \src\DAO\ProgrammeDAO::getInstance()->patchMatiere($id, $data);
+            jsonResponse(['ok' => true]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
+    })(),
+
+    // ── API admin : PATCH items programme (label, code dans l'arbre) ──
     $uri === '/api/admin/programme-items' && $method === 'POST' => (function() {
         requireLogin();
-        $data = json_decode(file_get_contents('php://input'), true);
-        $id = \src\DAO\ProgrammeDAO::getInstance()->saveItem($data);
-        jsonResponse(['ok' => true, 'id' => $id]);
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            $data = json_decode(file_get_contents('php://input'), true);
+            $id = \src\DAO\ProgrammeDAO::getInstance()->saveItem($data);
+            jsonResponse(['ok' => true, 'id' => $id]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
     })(),
 
+    // ── API admin : SUPPRIMER un item programme ──
     preg_match('#^/api/admin/programme-items/(\d+)/delete$#', $uri, $m) && $method === 'POST' => (function() use ($m) {
         requireLogin();
-        \src\DAO\ProgrammeDAO::getInstance()->deleteItem((int)$m[1]);
-        jsonResponse(['ok' => true]);
+        if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
+            \src\DAO\ProgrammeDAO::getInstance()->deleteItem((int)$m[1]);
+            jsonResponse(['ok' => true]);
+        }
+        else {
+            http_response_code(403);
+            view('errors/403');
+        }
     })(),
 
     // ---- 404 ----
