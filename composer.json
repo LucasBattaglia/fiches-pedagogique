@@ -1,0 +1,17 @@
+{
+  "name": "fiches-pedagogiques/app",
+  "description": "Application de fiches pédagogiques pour enseignants",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "setasign/fpdf": "^1.8"
+  },
+  "autoload": {
+    "psr-4": {
+      "src\\": "src/"
+    }
+  },
+  "config": {
+    "vendor-dir": "vendor"
+  }
+}

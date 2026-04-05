@@ -1,0 +1,11 @@
+Options -Indexes
+RewriteEngine On
+
+# Pas de RewriteBase avec un VirtualHost (la racine = le dossier du projet)
+
+# Autoriser les fichiers statiques existants
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Tout le reste → index.php
+RewriteRule ^ index.php [QSA,L]
