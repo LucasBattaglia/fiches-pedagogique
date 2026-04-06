@@ -1,17 +1,181 @@
 <?php
 /**
  * resources/views/admin/programmes/index.php
- * Gestion des programmes — triés par Cycle › Année › Matière › Classe
- * Tout est éditable inline. Bouton "En vigueur / Archivé" par ligne.
+ * Hiérarchie : Programme (année+cycle) > Matière > Classe
  */
 $pageTitle = 'Gestion des Programmes';
 $activeNav = 'admin';
 include __DIR__.'/../../partials/layout_start.php';
 ?>
 
-    <div class="container admin-prog">
+    <style>
+        .ap { padding-bottom: 80px; }
 
-        <!-- ── En-tête page ─────────────────────────────────────────── -->
+        /* ── NIVEAU 1 : Programme ────────────────────────────────── */
+        .prog-block {
+            margin-bottom: 28px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1.5px solid #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0,0,0,.07);
+            background: white;
+        }
+        .prog-header {
+            display: flex; align-items: center; gap: 14px;
+            padding: 16px 22px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: white;
+        }
+        .prog-header-info { flex: 1; min-width: 0; }
+        .prog-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.15rem; font-weight: 700;
+            display: flex; align-items: center; gap: 10px; margin: 0 0 4px;
+        }
+        .cycle-pill {
+            font-size: .72rem; font-weight: 700;
+            background: rgba(255,255,255,.2);
+            border: 1px solid rgba(255,255,255,.3);
+            border-radius: 99px; padding: 2px 10px;
+        }
+        .new-pill {
+            font-size: .7rem; font-weight: 700;
+            background: rgba(34,197,94,.25);
+            border: 1px solid rgba(34,197,94,.4);
+            border-radius: 99px; padding: 2px 8px; color: #86efac;
+        }
+        .prog-meta { font-size: .77rem; color: rgba(255,255,255,.6); display: flex; gap: 10px; flex-wrap: wrap; }
+        .prog-meta a { color: rgba(255,255,255,.75); text-decoration: underline; }
+        .prog-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .bprog {
+            display: inline-flex; align-items: center; gap: 5px;
+            height: 30px; padding: 0 12px; border-radius: 7px;
+            font-size: .78rem; font-weight: 600; cursor: pointer;
+            border: 1px solid; font-family: inherit; transition: all .13s;
+        }
+        .bprog-ghost { background: rgba(255,255,255,.15); color: white; border-color: rgba(255,255,255,.3); }
+        .bprog-ghost:hover { background: rgba(255,255,255,.28); }
+        .bprog-danger { background: rgba(220,38,38,.25); color: #fca5a5; border-color: rgba(220,38,38,.35); }
+        .bprog-danger:hover { background: rgba(220,38,38,.45); color: white; }
+
+        /* ── NIVEAU 2 : Matière ──────────────────────────────────── */
+        .mat-block { border-bottom: 1px solid #f0f0f0; }
+        .mat-block:last-of-type { border-bottom: none; }
+        .mat-header {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 22px 10px 28px;
+            background: #f8faff; border-bottom: 1px solid #e0e7ff;
+            cursor: pointer; user-select: none; transition: background .12s;
+        }
+        .mat-header:hover { background: #eef2ff; }
+        .mat-icon {
+            width: 24px; height: 24px; background: #dbeafe; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .75rem; flex-shrink: 0;
+        }
+        .mat-name { font-size: .9rem; font-weight: 700; color: #1e3a5f; flex: 1; }
+        .mat-code { font-size: .72rem; font-weight: 700; font-family: monospace; background: #ede9fe; color: #6d28d9; border-radius: 5px; padding: 2px 8px; }
+        .mat-count { font-size: .75rem; color: #9ca3af; }
+        .mat-toggle { font-size: .78rem; color: #9ca3af; }
+        .mat-acts { display: flex; gap: 5px; }
+        .mat-body { display: block; }
+        .mat-body.collapsed { display: none; }
+
+        /* ── NIVEAU 3 : Tableau classes ──────────────────────────── */
+        .cls-table { width: 100%; border-collapse: collapse; font-size: .855rem; }
+        .cls-table thead th {
+            background: #fafafa; padding: 7px 14px;
+            text-align: left; font-size: .7rem; text-transform: uppercase;
+            letter-spacing: .07em; color: #9ca3af; font-weight: 600;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .cls-table thead th:first-child { padding-left: 52px; }
+        .cls-table tbody tr { transition: background .1s; }
+        .cls-table tbody tr:hover { background: #fafbfc; }
+        .cls-table tbody td {
+            padding: 9px 14px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
+        }
+        .cls-table tbody tr:last-child td { border-bottom: none; }
+        .cls-table tbody td:first-child { padding-left: 52px; }
+        .row-arch { opacity: .5; }
+        .row-arch:hover { opacity: .78; }
+
+        /* ── Inputs inline ───────────────────────────────────────── */
+        .ii {
+            border: 1.5px solid transparent; border-radius: 5px;
+            padding: 4px 8px; font-size: .84rem; font-family: inherit;
+            color: #374151; background: transparent; width: 100%;
+            transition: all .15s;
+        }
+        .ii:focus { border-color: #2563eb; background: white; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+        .ii--sm { max-width: 80px; text-align: center; }
+        .ii--md { max-width: 200px; }
+        .ii--lg { max-width: 360px; }
+        .ii--notes { max-width: 220px; color: #6b7280; font-size: .81rem; }
+        .ii.saved  { border-color: #4ade80 !important; }
+        .ii.saving { border-color: #fbbf24 !important; }
+        .ii.error  { border-color: #f87171 !important; }
+
+        /* ── Vigueur toggle ──────────────────────────────────────── */
+        .vbtn {
+            display: inline-flex; align-items: center; gap: 5px;
+            border-radius: 99px; padding: 4px 12px;
+            font-size: .76rem; font-weight: 700; cursor: pointer;
+            border: 1.5px solid; transition: all .14s; font-family: inherit; white-space: nowrap;
+        }
+        .vbtn.on  { background:#dcfce7; color:#15803d; border-color:#86efac; }
+        .vbtn.on:hover  { background:#bbf7d0; }
+        .vbtn.off { background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; }
+        .vbtn.off:hover { background:#e5e7eb; color:#6b7280; }
+        .vdot { width:6px; height:6px; border-radius:50%; display:inline-block; flex-shrink:0; }
+        .vbtn.on .vdot { background:#16a34a; }
+        .vbtn.off .vdot { background:#9ca3af; }
+
+        /* ── Icônes action ───────────────────────────────────────── */
+        .bico {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 6px;
+            border: 1.5px solid #e5e7eb; background: white;
+            cursor: pointer; font-size: .8rem; color: #6b7280;
+            transition: all .13s; text-decoration: none;
+        }
+        .bico:hover       { border-color:#2563eb; color:#2563eb; background:#eff6ff; text-decoration:none; }
+        .bico.del:hover   { border-color:#dc2626; color:#dc2626; background:#fee2e2; }
+
+        /* ── Zones "Ajouter" ─────────────────────────────────────── */
+        .add-cls-zone {
+            padding: 8px 22px 8px 52px;
+            background: #fafbfc; border-top: 1px dashed #e5e7eb;
+        }
+        .add-mat-zone {
+            padding: 10px 22px 10px 28px;
+            background: #f8faff; border-top: 1px dashed #c7d2fe;
+        }
+        .alink {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: .78rem; font-weight: 600; color: #2563eb;
+            background: none; border: none; cursor: pointer;
+            padding: 3px 6px; border-radius: 5px; font-family: inherit;
+            transition: background .13s;
+        }
+        .alink:hover { background: #eff6ff; }
+
+        /* ── Empty state matières ────────────────────────────────── */
+        .mat-empty {
+            padding: 28px; text-align: center;
+            color: #9ca3af; font-size: .88rem;
+        }
+
+        /* ── Toast ───────────────────────────────────────────────── */
+        #ap-toast { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+        .ti { background:#1e3a5f; color:white; padding:10px 18px; border-radius:10px; font-size:.83rem; box-shadow:0 4px 16px rgba(0,0,0,.2); animation:tIn .2s ease; }
+        .ti.err { background:#dc2626; }
+        @keyframes tIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    </style>
+
+    <div class="container ap">
+
+        <!-- ── EN-TÊTE ──────────────────────────────────────────── -->
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px">
             <div>
                 <div class="breadcrumb">
@@ -21,163 +185,110 @@ include __DIR__.'/../../partials/layout_start.php';
                 </div>
                 <h1 style="font-family:var(--font-titre);font-size:1.8rem;margin:0">Programmes officiels</h1>
                 <p class="text-muted text-sm" style="margin-top:4px">
-                    Triés par <strong>cycle › année › matière › classe</strong>.
-                    Cliquez sur un champ pour l'éditer, puis cliquez ailleurs pour sauvegarder.
+                    Hiérarchie : <strong>Programme</strong> (année + cycle) › <strong>Matière</strong> › <strong>Classe</strong>
                 </p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn btn--ghost btn--sm" onclick="expandAll()">↓ Tout ouvrir</button>
                 <button class="btn btn--ghost btn--sm" onclick="collapseAll()">↑ Tout fermer</button>
-                <button class="btn btn--primary btn--sm" onclick="openAddModal()">
+                <button class="btn btn--primary btn--sm" onclick="openModalProg()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
                     Nouveau programme
                 </button>
             </div>
         </div>
 
-        <!-- ── Légende ──────────────────────────────────────────────── -->
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;font-size:.78rem;color:#6b7280;flex-wrap:wrap;background:white;border:1px solid var(--gris-300);border-radius:8px;padding:10px 16px">
-    <span>
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:5px;vertical-align:middle"></span>
-      <strong>En vigueur</strong> = visible dans les formulaires de séquence
-    </span>
+        <!-- ── LÉGENDE ──────────────────────────────────────────── -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;font-size:.78rem;color:#6b7280;background:white;border:1px solid var(--gris-300);border-radius:8px;padding:10px 16px;flex-wrap:wrap">
+            <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#16a34a;margin-right:4px;vertical-align:middle"></span><strong>En vigueur</strong> = visible dans les formulaires</span>
             <span style="color:#d1d5db">|</span>
-            <span>
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#9ca3af;margin-right:5px;vertical-align:middle"></span>
-      <strong>Archivé</strong> = masqué des formulaires, visible uniquement ici
-    </span>
+            <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#9ca3af;margin-right:4px;vertical-align:middle"></span><strong>Archivé</strong> = masqué, visible ici uniquement</span>
             <span style="color:#d1d5db">|</span>
-            <span>✏️ Cliquez sur n'importe quel texte pour l'éditer directement</span>
+            <span>✏️ Cliquez sur un champ texte pour l'éditer directement</span>
         </div>
 
-        <?php
-        // ── Regroupement : Cycle > Année desc > Matière alpha > Versions ─
-        $grouped = [];
-        foreach ($versions as $v) {
-            $cid   = $v['cycle_id'];
-            $annee = (int)$v['annee_entree'];
-            $mid   = $v['matiere_id'];
-
-            if (!isset($grouped[$cid])) {
-                $grouped[$cid] = [
-                        'cycle_label' => $v['cycle_label'],
-                        'cycle_code'  => $v['cycle_code'] ?? '',
-                        'annees'      => [],
-                ];
-            }
-            if (!isset($grouped[$cid]['annees'][$annee])) {
-                $grouped[$cid]['annees'][$annee] = [];
-            }
-            if (!isset($grouped[$cid]['annees'][$annee][$mid])) {
-                $grouped[$cid]['annees'][$annee][$mid] = [
-                        'matiere_label' => $v['matiere_label'],
-                        'matiere_code'  => $v['matiere_code'] ?? '',
-                        'versions'      => [],
-                ];
-            }
-            $grouped[$cid]['annees'][$annee][$mid]['versions'][] = $v;
-        }
-
-        // Trier
-        ksort($grouped); // cycles par id
-        foreach ($grouped as &$cycleData) {
-            krsort($cycleData['annees']); // années décroissantes
-            foreach ($cycleData['annees'] as &$matieres) {
-                uasort($matieres, fn($a, $b) => strcmp($a['matiere_label'], $b['matiere_label']));
-            }
-        }
-        unset($cycleData, $matieres);
-        ?>
-
-        <?php if (empty($grouped)): ?>
+        <?php if (empty($programmes)): ?>
             <div class="empty-state" style="margin-top:40px">
                 <div class="empty-state__icon">📚</div>
-                <h3>Aucun programme configuré</h3>
-                <p>Commencez par créer un premier programme.</p>
-                <button class="btn btn--primary" onclick="openAddModal()">Nouveau programme</button>
+                <h3>Aucun programme</h3>
+                <p>Créez votre premier programme en cliquant sur le bouton ci-dessus.</p>
+                <button class="btn btn--primary" onclick="openModalProg()">Créer un programme</button>
             </div>
         <?php else: ?>
 
-            <?php foreach ($grouped as $cycleId => $cycleData):
-                // Compter toutes les versions de ce cycle
-                $totalVersions = 0;
-                foreach ($cycleData['annees'] as $matieres) {
-                    foreach ($matieres as $m) { $totalVersions += count($m['versions']); }
-                }
-                ?>
-                <div class="cycle-block" id="cycle-<?= $cycleId ?>">
+            <?php foreach ($programmes as $prog): ?>
+                <div class="prog-block" id="prog-<?= $prog['id'] ?>">
 
-                    <!-- En-tête cycle -->
-                    <div class="cycle-header">
-                        <h2><?= htmlspecialchars($cycleData['cycle_label']) ?></h2>
-                        <span class="cycle-count-badge"><?= $totalVersions ?> programme(s)</span>
+                    <!-- En-tête programme -->
+                    <div class="prog-header">
+                        <div class="prog-header-info">
+                            <div class="prog-title">
+                                Programme <?= (int)$prog['annee_entree'] ?>
+                                <span class="cycle-pill"><?= htmlspecialchars($prog['cycle_label']) ?></span>
+                                <?php if ((int)$prog['annee_entree'] >= 2025): ?>
+                                    <span class="new-pill">✦ Nouveau</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="prog-meta">
+                                <span>📅 Rentrée <?= (int)$prog['annee_entree'] ?></span>
+                                <span>·</span>
+                                <span><?= count($prog['matieres']) ?> matière(s)</span>
+                                <?php if (!empty($prog['source_url'])): ?>
+                                    <span>·</span>
+                                    <a href="<?= htmlspecialchars($prog['source_url']) ?>" target="_blank">Source officielle ↗</a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="prog-actions">
+                            <button class="bprog bprog-ghost" onclick="openModalMat(<?= $prog['id'] ?>)">
+                                + Matière
+                            </button>
+                            <button class="bprog bprog-ghost"
+                                    onclick="openModalEditProg(<?= $prog['id'] ?>, <?= (int)$prog['annee_entree'] ?>, <?= (int)$prog['cycle_id'] ?>, '<?= addslashes(htmlspecialchars($prog['source_url'] ?? '')) ?>')">
+                                ✏️ Modifier
+                            </button>
+                            <button class="bprog bprog-danger" onclick="deleteProg(<?= $prog['id'] ?>, <?= (int)$prog['annee_entree'] ?>)">
+                                🗑
+                            </button>
+                        </div>
                     </div>
 
-                    <?php foreach ($cycleData['annees'] as $annee => $matieres):
-                        $isNew = $annee >= 2025;
-                        $nbVersionsAnnee = 0;
-                        foreach ($matieres as $m) { $nbVersionsAnnee += count($m['versions']); }
-                        ?>
-                        <div class="annee-block">
+                    <!-- Matières -->
+                    <?php if (empty($prog['matieres'])): ?>
+                        <div class="mat-empty">
+                            Aucune matière. <button class="alink" onclick="openModalMat(<?= $prog['id'] ?>)">+ Ajouter une matière</button>
+                        </div>
+                    <?php else: ?>
 
-                            <!-- En-tête année (cliquable) -->
-                            <div class="annee-header" onclick="toggleAnnee(this)">
-          <span class="annee-pill <?= $isNew ? 'nouveau' : '' ?>">
-            <span class="pill-dot"></span>
-            Programme <?= (int)$annee ?>
-          </span>
-                                <?php if ($isNew): ?>
-                                    <span class="badge-new">✦ Nouveau</span>
-                                <?php endif; ?>
-                                <span style="font-size:.78rem;color:#9ca3af;margin-left:4px"><?= $nbVersionsAnnee ?> version(s)</span>
-                                <span class="annee-toggle">▼</span>
-                            </div>
+                        <?php foreach ($prog['matieres'] as $mat): ?>
+                            <div class="mat-block" id="mat-<?= $mat['pm_id'] ?>">
 
-                            <!-- Corps de l'année -->
-                            <div class="annee-body">
-                                <?php foreach ($matieres as $matiereId => $matiereData): ?>
-                                    <div class="matiere-section">
+                                <!-- En-tête matière -->
+                                <div class="mat-header" onclick="toggleMat(this)">
+                                    <div class="mat-icon">📘</div>
+                                    <span class="mat-name"><?= htmlspecialchars($mat['matiere_label']) ?></span>
+                                    <?php if (!empty($mat['matiere_code'])): ?>
+                                        <span class="mat-code"><?= htmlspecialchars($mat['matiere_code']) ?></span>
+                                    <?php endif; ?>
+                                    <span class="mat-count"><?= count($mat['classes']) ?> classe(s)</span>
+                                    <div class="mat-acts" onclick="event.stopPropagation()">
+                                        <button class="bico" title="Modifier"
+                                                onclick="openModalEditMat(<?= $mat['pm_id'] ?>, <?= $mat['matiere_id'] ?>, '<?= addslashes(htmlspecialchars($mat['matiere_label'])) ?>', '<?= addslashes(htmlspecialchars($mat['matiere_code'])) ?>')">✏️</button>
+                                        <button class="bico del" title="Supprimer cette matière et ses classes"
+                                                onclick="deleteMat(<?= $mat['pm_id'] ?>, '<?= addslashes(htmlspecialchars($mat['matiere_label'])) ?>')">🗑</button>
+                                    </div>
+                                    <span class="mat-toggle">▼</span>
+                                </div>
 
-                                        <!-- Titre matière — éditable inline -->
-                                        <div class="matiere-title-row">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" style="flex-shrink:0">
-                                                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-                                            </svg>
+                                <!-- Corps matière -->
+                                <div class="mat-body">
 
-                                            <input
-                                                    type="text"
-                                                    class="matiere-edit-input"
-                                                    value="<?= htmlspecialchars($matiereData['matiere_label']) ?>"
-                                                    title="Cliquer pour modifier le nom de la matière"
-                                                    onblur="saveMatiere(<?= $matiereId ?>, 'label', this.value, this)"
-                                                    onkeydown="if(event.key==='Enter')this.blur()"
-                                            >
-
-                                            <span style="font-size:.74rem;color:#9ca3af;flex-shrink:0">Code :</span>
-                                            <input
-                                                    type="text"
-                                                    class="code-input"
-                                                    value="<?= htmlspecialchars($matiereData['matiere_code']) ?>"
-                                                    title="Code de la matière"
-                                                    onblur="saveMatiere(<?= $matiereId ?>, 'code', this.value, this)"
-                                                    onkeydown="if(event.key==='Enter')this.blur()"
-                                                    placeholder="CODE"
-                                            >
-
-                                            <button
-                                                    class="btn-ico"
-                                                    style="margin-left:4px"
-                                                    title="Ajouter un programme pour cette matière et cette année"
-                                                    onclick="openAddModal(<?= $cycleId ?>, <?= $matiereId ?>, <?= $annee ?>)"
-                                            >➕</button>
-                                        </div>
-
-                                        <!-- Tableau des versions par classe -->
-                                        <table class="classes-table">
+                                    <?php if (!empty($mat['classes'])): ?>
+                                        <table class="cls-table">
                                             <thead>
                                             <tr>
                                                 <th>Classe / Portée</th>
-                                                <th>Intitulé du programme</th>
+                                                <th>Intitulé</th>
                                                 <th>Rentrée</th>
                                                 <th>Notes</th>
                                                 <th style="text-align:center">Statut</th>
@@ -185,361 +296,442 @@ include __DIR__.'/../../partials/layout_start.php';
                                             </tr>
                                             </thead>
                                             <tbody>
-                                            <?php foreach ($matiereData['versions'] as $pv):
-                                                $archived = !$pv['en_vigueur'];
+                                            <?php foreach ($mat['classes'] as $pv):
+                                                $arch = !(bool)$pv['en_vigueur'];
                                                 ?>
-                                                <tr
-                                                        id="pv-row-<?= $pv['id'] ?>"
-                                                        class="<?= $archived ? 'row-archived' : '' ?>"
-                                                >
+                                                <tr id="pv-<?= $pv['id'] ?>" class="<?= $arch ? 'row-arch' : '' ?>">
                                                     <!-- Classe -->
                                                     <td>
-                      <span style="font-weight:600;font-size:.84rem;color:<?= $archived ? '#9ca3af' : '#1e3a5f' ?>">
-                        <?= htmlspecialchars($pv['classe_label'] ?? '— Tout le cycle —') ?>
-                      </span>
+                  <span style="font-weight:600;font-size:.84rem;color:<?= $arch ? '#9ca3af' : '#1e3a5f' ?>">
+                    <?= htmlspecialchars($pv['classe_label'] ?? '— Tout le cycle —') ?>
+                  </span>
                                                     </td>
-
-                                                    <!-- Intitulé -->
+                                                    <!-- Intitulé inline -->
                                                     <td>
-                                                        <input
-                                                                type="text"
-                                                                class="inline-input"
-                                                                value="<?= htmlspecialchars($pv['label']) ?>"
-                                                                title="Intitulé du programme"
-                                                                onblur="saveVersion(<?= $pv['id'] ?>, 'label', this.value, this)"
-                                                                onkeydown="if(event.key==='Enter')this.blur()"
-                                                        >
+                                                        <input type="text" class="ii ii--lg"
+                                                               value="<?= htmlspecialchars($pv['label']) ?>"
+                                                               onblur="savePv(<?= $pv['id'] ?>, 'label', this.value, this)"
+                                                               onkeydown="if(event.key==='Enter')this.blur()">
                                                     </td>
-
-                                                    <!-- Année -->
+                                                    <!-- Rentrée inline -->
                                                     <td>
-                                                        <input
-                                                                type="number"
-                                                                class="inline-input inline-input--annee"
-                                                                value="<?= (int)$pv['annee_entree'] ?>"
-                                                                min="2000" max="2040"
-                                                                title="Année de rentrée"
-                                                                onblur="saveVersion(<?= $pv['id'] ?>, 'annee_entree', this.value, this)"
-                                                                onkeydown="if(event.key==='Enter')this.blur()"
-                                                        >
+                                                        <input type="number" class="ii ii--sm"
+                                                               value="<?= (int)$pv['annee_entree'] ?>" min="2000" max="2040"
+                                                               onblur="savePv(<?= $pv['id'] ?>, 'annee_entree', this.value, this)"
+                                                               onkeydown="if(event.key==='Enter')this.blur()">
                                                     </td>
-
-                                                    <!-- Notes -->
+                                                    <!-- Notes inline -->
                                                     <td>
-                                                        <input
-                                                                type="text"
-                                                                class="inline-input inline-input--notes"
-                                                                value="<?= htmlspecialchars($pv['notes'] ?? '') ?>"
-                                                                placeholder="Notes…"
-                                                                title="Notes optionnelles"
-                                                                onblur="saveVersion(<?= $pv['id'] ?>, 'notes', this.value, this)"
-                                                                onkeydown="if(event.key==='Enter')this.blur()"
-                                                        >
+                                                        <input type="text" class="ii ii--notes"
+                                                               value="<?= htmlspecialchars($pv['notes'] ?? '') ?>" placeholder="Notes…"
+                                                               onblur="savePv(<?= $pv['id'] ?>, 'notes', this.value, this)"
+                                                               onkeydown="if(event.key==='Enter')this.blur()">
                                                     </td>
-
-                                                    <!-- Statut toggle -->
+                                                    <!-- Statut -->
                                                     <td style="text-align:center;white-space:nowrap">
-                                                        <button
-                                                                class="vigueur-btn <?= $archived ? 'inactive' : 'active' ?>"
-                                                                id="vigueur-<?= $pv['id'] ?>"
-                                                                onclick="toggleVigueur(<?= $pv['id'] ?>, <?= $archived ? 'true' : 'false' ?>)"
-                                                                title="<?= $archived ? 'Cliquer pour remettre en vigueur' : 'Cliquer pour archiver' ?>"
-                                                        >
-                                                            <span class="vigueur-dot"></span>
-                                                            <span id="vigueur-label-<?= $pv['id'] ?>"><?= $archived ? 'Archivé' : 'En vigueur' ?></span>
+                                                        <button class="vbtn <?= $arch ? 'off' : 'on' ?>" id="vbtn-<?= $pv['id'] ?>"
+                                                                onclick="toggleVigueur(<?= $pv['id'] ?>, <?= $arch ? 'true' : 'false' ?>)">
+                                                            <span class="vdot"></span>
+                                                            <span id="vlbl-<?= $pv['id'] ?>"><?= $arch ? 'Archivé' : 'En vigueur' ?></span>
                                                         </button>
                                                     </td>
-
                                                     <!-- Actions -->
                                                     <td style="padding-right:22px">
-                                                        <div class="action-cell">
-                                                            <a href="/admin/programmes/version/<?= $pv['id'] ?>"
-                                                               class="btn-ico"
-                                                               title="Éditer le contenu pédagogique (compétences, objectifs…)">✏️</a>
-                                                            <button
-                                                                    class="btn-ico danger"
-                                                                    title="Supprimer ce programme"
-                                                                    onclick="deleteVersion(<?= $pv['id'] ?>, '<?= addslashes(htmlspecialchars($pv['label'])) ?>')">🗑</button>
+                                                        <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
+                                                            <a href="/admin/programmes/version/<?= $pv['id'] ?>" class="bico" title="Éditer les compétences">✏️</a>
+                                                            <button class="bico del" title="Supprimer"
+                                                                    onclick="deletePv(<?= $pv['id'] ?>, '<?= addslashes(htmlspecialchars($pv['label'])) ?>')">🗑</button>
                                                         </div>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
                                             </tbody>
                                         </table>
+                                    <?php endif; ?>
 
-                                        <!-- Ajouter une version pour cette matière -->
-                                        <div class="add-row-zone">
-                                            <button
-                                                    class="add-row-btn"
-                                                    onclick="openAddModal(<?= $cycleId ?>, <?= $matiereId ?>, <?= $annee ?>)"
-                                            >
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
-                                                Ajouter une version pour cette matière
-                                            </button>
-                                        </div>
+                                    <!-- + Ajouter une classe -->
+                                    <div class="add-cls-zone">
+                                        <button class="alink"
+                                                onclick="openModalClasse(<?= $mat['pm_id'] ?>, <?= $prog['id'] ?>, <?= (int)$prog['annee_entree'] ?>, <?= (int)$prog['cycle_id'] ?>)">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+                                            Ajouter une classe
+                                        </button>
+                                    </div>
 
-                                    </div><!-- /.matiere-section -->
-                                <?php endforeach; ?>
-                            </div><!-- /.annee-body -->
-                        </div><!-- /.annee-block -->
-                    <?php endforeach; ?>
-                </div><!-- /.cycle-block -->
+                                </div><!-- /.mat-body -->
+                            </div><!-- /.mat-block -->
+                        <?php endforeach; ?>
+
+                        <!-- + Ajouter une matière -->
+                        <div class="add-mat-zone">
+                            <button class="alink" onclick="openModalMat(<?= $prog['id'] ?>)">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+                                Ajouter une matière à ce programme
+                            </button>
+                        </div>
+
+                    <?php endif; ?>
+                </div><!-- /.prog-block -->
             <?php endforeach; ?>
         <?php endif; ?>
 
-    </div><!-- /.admin-prog -->
+    </div><!-- /.ap -->
 
-    <!-- ══════════════════════════════════════════════════════════
-         Modal : Créer un nouveau programme
-    ════════════════════════════════════════════════════════════ -->
-    <div class="modal-overlay" id="modal-add-prog">
-        <div class="modal" style="max-width:580px">
+    <!-- ═══════════════════════════════════════════════════════
+         MODAL 1 : Programme (créer / modifier)
+    ════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-prog">
+        <div class="modal" style="max-width:460px">
             <div class="modal__header">
-                <h3>➕ Nouveau programme</h3>
-                <button class="btn btn--ghost btn--sm" onclick="closeModal()">✕</button>
+                <h3 id="mprog-title">➕ Nouveau programme</h3>
+                <button class="btn btn--ghost btn--sm" onclick="closeModal('modal-prog')">✕</button>
             </div>
-            <form id="form-add-prog" onsubmit="submitAdd(event)">
+            <form onsubmit="submitProg(event)">
+                <input type="hidden" id="mprog-id" value="">
                 <div class="modal__body">
-
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="add-cycle">Cycle <span class="required">*</span></label>
-                            <select name="cycle_id" id="add-cycle" required onchange="loadClassesForModal(this.value)">
+                            <label for="mprog-annee">Année de rentrée <span class="required">*</span></label>
+                            <input type="number" id="mprog-annee" min="2000" max="2040" value="2025" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="mprog-cycle">Cycle <span class="required">*</span></label>
+                            <select id="mprog-cycle" required>
                                 <option value="">— Sélectionner —</option>
                                 <?php foreach ($cycles as $c): ?>
                                     <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['label']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="add-classe">Classe (optionnel)</label>
-                            <select name="classe_id" id="add-classe">
-                                <option value="">— Tout le cycle —</option>
-                            </select>
-                        </div>
                     </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="add-matiere">Matière <span class="required">*</span></label>
-                            <select name="matiere_id" id="add-matiere" required>
-                                <option value="">— Sélectionner —</option>
-                                <?php foreach ($matieres as $m): ?>
-                                    <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['label']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="add-annee">Année de rentrée <span class="required">*</span></label>
-                            <input type="number" id="add-annee" name="annee_entree" min="2000" max="2040" value="2025" required>
-                        </div>
-                    </div>
-
                     <div class="form-group">
-                        <label for="add-label">Intitulé du programme <span class="required">*</span></label>
-                        <input type="text" id="add-label" name="label" required
-                               placeholder="Ex : Français – CM1 (2025)">
+                        <label for="mprog-source">URL source officielle</label>
+                        <input type="url" id="mprog-source" placeholder="https://eduscol.education.fr/…">
+                        <p class="form-hint">Lien vers le texte officiel du programme.</p>
                     </div>
-
-                    <div class="form-group">
-                        <label for="add-notes">Notes</label>
-                        <input type="text" id="add-notes" name="notes"
-                               placeholder="Notes optionnelles…">
-                    </div>
-
-                    <div class="form-check">
-                        <input type="checkbox" id="add-vigueur" name="en_vigueur" value="1" checked>
-                        <label for="add-vigueur">Mettre <strong>en vigueur</strong> immédiatement</label>
-                    </div>
-
                 </div>
                 <div class="modal__footer">
-                    <button type="button" class="btn btn--ghost" onclick="closeModal()">Annuler</button>
-                    <button type="submit" class="btn btn--primary" id="btn-add-submit">Créer le programme</button>
+                    <button type="button" class="btn btn--ghost" onclick="closeModal('modal-prog')">Annuler</button>
+                    <button type="submit" class="btn btn--primary" id="mprog-submit">Créer le programme</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Toast container -->
-    <div id="admin-toast"></div>
+    <!-- ═══════════════════════════════════════════════════════
+         MODAL 2 : Matière (créer / modifier)
+    ════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-mat">
+        <div class="modal" style="max-width:420px">
+            <div class="modal__header">
+                <h3 id="mmat-title">📘 Nouvelle matière</h3>
+                <button class="btn btn--ghost btn--sm" onclick="closeModal('modal-mat')">✕</button>
+            </div>
+            <form onsubmit="submitMat(event)">
+                <input type="hidden" id="mmat-prog-id" value="">
+                <input type="hidden" id="mmat-pm-id" value="">
+                <input type="hidden" id="mmat-matiere-id" value="">
+                <div class="modal__body">
+                    <div class="form-group">
+                        <label for="mmat-label">Nom de la matière <span class="required">*</span></label>
+                        <input type="text" id="mmat-label" required placeholder="Ex : Français">
+                    </div>
+                    <div class="form-group">
+                        <label for="mmat-code">Code <span class="required">*</span></label>
+                        <input type="text" id="mmat-code" required placeholder="Ex : FRANCAIS"
+                               style="font-family:monospace;text-transform:uppercase">
+                        <p class="form-hint">Majuscules, sans espaces ni accents. Doit être unique.</p>
+                    </div>
+                </div>
+                <div class="modal__footer">
+                    <button type="button" class="btn btn--ghost" onclick="closeModal('modal-mat')">Annuler</button>
+                    <button type="submit" class="btn btn--primary" id="mmat-submit">Créer la matière</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         MODAL 3 : Classe (créer)
+    ════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-classe">
+        <div class="modal" style="max-width:520px">
+            <div class="modal__header">
+                <h3>🏫 Ajouter une classe</h3>
+                <button class="btn btn--ghost btn--sm" onclick="closeModal('modal-classe')">✕</button>
+            </div>
+            <form onsubmit="submitClasse(event)">
+                <input type="hidden" id="mcls-pm-id" value="">
+                <div class="modal__body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mcls-classe">Classe</label>
+                            <select id="mcls-classe">
+                                <option value="">— Tout le cycle —</option>
+                                <?php foreach ($classes as $cl): ?>
+                                    <option value="<?= $cl['id'] ?>" data-cycle="<?= $cl['cycle_id'] ?>">
+                                        <?= htmlspecialchars($cl['label']) ?> (<?= htmlspecialchars($cl['code']) ?>)
+                                        — <?= htmlspecialchars($cl['cycle_label']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="mcls-annee">Rentrée <span class="required">*</span></label>
+                            <input type="number" id="mcls-annee" min="2000" max="2040" value="2025" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="mcls-label">Intitulé du programme <span class="required">*</span></label>
+                        <input type="text" id="mcls-label" required placeholder="Ex : Français – CM1 (2025)">
+                    </div>
+                    <div class="form-group">
+                        <label for="mcls-notes">Notes</label>
+                        <input type="text" id="mcls-notes" placeholder="Ex : Nouveau programme rentrée 2025">
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="mcls-vigueur" checked>
+                        <label for="mcls-vigueur">Mettre <strong>en vigueur</strong> immédiatement</label>
+                    </div>
+                </div>
+                <div class="modal__footer">
+                    <button type="button" class="btn btn--ghost" onclick="closeModal('modal-classe')">Annuler</button>
+                    <button type="submit" class="btn btn--primary" id="mcls-submit">Ajouter la classe</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="ap-toast"></div>
 
     <script>
-        // ════════════════════════════════════════════════════════════
-        //  TOAST
-        // ════════════════════════════════════════════════════════════
-        function toast(msg, err = false) {
-            const c = document.getElementById('admin-toast');
+        // ════════════════════════════════════════════════════════
+        //  UTILS
+        // ════════════════════════════════════════════════════════
+        function toast(msg, err=false) {
+            const c = document.getElementById('ap-toast');
             const d = document.createElement('div');
-            d.className = 'toast-item' + (err ? ' err' : '');
+            d.className = 'ti' + (err?' err':'');
             d.textContent = msg;
             c.appendChild(d);
-            setTimeout(() => d.remove(), 3000);
+            setTimeout(() => d.remove(), 3200);
         }
 
-        // ════════════════════════════════════════════════════════════
-        //  AJAX helper
-        // ════════════════════════════════════════════════════════════
-        async function api(url, payload) {
+        async function api(url, data) {
             try {
                 const r = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(data)
                 });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return await r.json();
-            } catch (e) {
-                toast('Erreur réseau : ' + e.message, true);
-                return null;
-            }
+                const text = await r.text();
+                try { return JSON.parse(text); }
+                catch(e) { console.error('Non-JSON:', text.substring(0,300)); toast('Erreur serveur (non-JSON)', true); return null; }
+            } catch(e) { toast('Erreur réseau: '+e.message, true); return null; }
         }
 
-        // ════════════════════════════════════════════════════════════
-        //  SAVE — champ programme_versions
-        // ════════════════════════════════════════════════════════════
-        async function saveVersion(id, field, value, inputEl) {
-            // Feedback visuel pendant la sauvegarde
-            if (inputEl) inputEl.style.borderColor = '#fbbf24';
-            const r = await api('/api/admin/programme-versions', { id, [field]: value });
-            if (r?.ok) {
-                if (inputEl) inputEl.style.borderColor = '#4ade80';
-                setTimeout(() => { if (inputEl) inputEl.style.borderColor = 'transparent'; }, 1000);
-                toast('✓ Sauvegardé');
-            } else {
-                if (inputEl) inputEl.style.borderColor = '#f87171';
-            }
-        }
+        function openModal(id)  { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        document.querySelectorAll('.modal-overlay').forEach(o => {
+            o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
+        });
 
-        // ════════════════════════════════════════════════════════════
-        //  SAVE — champ matière
-        // ════════════════════════════════════════════════════════════
-        async function saveMatiere(id, field, value, inputEl) {
-            if (inputEl) inputEl.style.borderColor = '#fbbf24';
-            const r = await api('/api/admin/matieres', { id, [field]: value });
-            if (r?.ok) {
-                if (inputEl) inputEl.style.borderColor = '#4ade80';
-                setTimeout(() => { if (inputEl) inputEl.style.borderColor = 'transparent'; }, 1000);
-                toast('✓ Matière mise à jour');
-            } else {
-                if (inputEl) inputEl.style.borderColor = '#f87171';
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════
-        //  TOGGLE VIGUEUR
-        // ════════════════════════════════════════════════════════════
-        async function toggleVigueur(id, newState) {
-            const r = await api('/api/admin/programme-versions', { id, en_vigueur: newState });
-            if (!r?.ok) return;
-
-            const btn   = document.getElementById('vigueur-' + id);
-            const label = document.getElementById('vigueur-label-' + id);
-            const row   = document.getElementById('pv-row-' + id);
-            const actif = (newState === true || newState === 'true');
-
-            btn.className = 'vigueur-btn ' + (actif ? 'active' : 'inactive');
-            btn.title     = actif ? 'Cliquer pour archiver' : 'Cliquer pour remettre en vigueur';
-            btn.setAttribute('onclick', `toggleVigueur(${id}, ${actif ? 'false' : 'true'})`);
-            label.textContent = actif ? 'En vigueur' : 'Archivé';
-
-            row.className = actif ? '' : 'row-archived';
-
-            toast(actif ? '✓ Programme activé' : '✓ Programme archivé');
-        }
-
-        // ════════════════════════════════════════════════════════════
-        //  SUPPRIMER version
-        // ════════════════════════════════════════════════════════════
-        async function deleteVersion(id, label) {
-            if (!confirm(`Supprimer "${label}" ?\n\nCette action supprimera aussi tous les items pédagogiques liés (compétences, objectifs…).`)) return;
-            const r = await api(`/api/admin/programme-versions/${id}/delete`, {});
-            if (r?.ok) {
-                document.getElementById('pv-row-' + id)?.remove();
-                toast('✓ Programme supprimé');
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════
+        // ════════════════════════════════════════════════════════
         //  ACCORDION
-        // ════════════════════════════════════════════════════════════
-        function toggleAnnee(header) {
-            const body  = header.nextElementSibling;
-            const arrow = header.querySelector('.annee-toggle');
-            const col   = body.classList.toggle('collapsed');
-            arrow.textContent = col ? '▶' : '▼';
+        // ════════════════════════════════════════════════════════
+        function toggleMat(h) {
+            const b = h.nextElementSibling;
+            const a = h.querySelector('.mat-toggle');
+            a.textContent = b.classList.toggle('collapsed') ? '▶' : '▼';
         }
-        function expandAll() {
-            document.querySelectorAll('.annee-body').forEach(b => b.classList.remove('collapsed'));
-            document.querySelectorAll('.annee-toggle').forEach(a => a.textContent = '▼');
+        function expandAll()  {
+            document.querySelectorAll('.mat-body').forEach(b=>b.classList.remove('collapsed'));
+            document.querySelectorAll('.mat-toggle').forEach(a=>a.textContent='▼');
         }
         function collapseAll() {
-            document.querySelectorAll('.annee-body').forEach(b => b.classList.add('collapsed'));
-            document.querySelectorAll('.annee-toggle').forEach(a => a.textContent = '▶');
+            document.querySelectorAll('.mat-body').forEach(b=>b.classList.add('collapsed'));
+            document.querySelectorAll('.mat-toggle').forEach(a=>a.textContent='▶');
         }
 
-        // ════════════════════════════════════════════════════════════
-        //  MODAL ajout programme
-        // ════════════════════════════════════════════════════════════
-        function openAddModal(cycleId, matiereId, annee) {
-            document.getElementById('form-add-prog').reset();
-
-            if (cycleId) {
-                document.getElementById('add-cycle').value = cycleId;
-                loadClassesForModal(cycleId);
+        // ════════════════════════════════════════════════════════
+        //  INLINE SAVE — programme_version
+        // ════════════════════════════════════════════════════════
+        async function savePv(id, field, value, el) {
+            el.classList.add('saving');
+            const r = await api('/api/admin/programme-versions', {id, [field]: value});
+            el.classList.remove('saving');
+            if(r?.ok) {
+                el.classList.add('saved');
+                setTimeout(()=>el.classList.remove('saved'), 1200);
+                toast('✓ Sauvegardé');
+            } else {
+                el.classList.add('error');
+                setTimeout(()=>el.classList.remove('error'), 2000);
+                toast(r?.error||'Erreur', true);
             }
-            if (matiereId) document.getElementById('add-matiere').value = matiereId;
-            if (annee)     document.getElementById('add-annee').value   = annee;
-
-            document.getElementById('add-vigueur').checked = true;
-            document.getElementById('modal-add-prog').classList.add('open');
         }
 
-        function closeModal() {
-            document.getElementById('modal-add-prog').classList.remove('open');
+        // ════════════════════════════════════════════════════════
+        //  TOGGLE VIGUEUR
+        // ════════════════════════════════════════════════════════
+        async function toggleVigueur(id, newState) {
+            const r = await api('/api/admin/programme-versions', {id, en_vigueur: newState});
+            if(!r?.ok) { toast(r?.error||'Erreur', true); return; }
+            const actif = (newState===true||newState==='true');
+            document.getElementById('vbtn-'+id).className = 'vbtn '+(actif?'on':'off');
+            document.getElementById('vbtn-'+id).setAttribute('onclick',`toggleVigueur(${id},${actif?'false':'true'})`);
+            document.getElementById('vlbl-'+id).textContent = actif ? 'En vigueur' : 'Archivé';
+            const row = document.getElementById('pv-'+id);
+            if(row) row.className = actif ? '' : 'row-arch';
+            toast(actif ? '✓ Activé' : '✓ Archivé');
         }
 
-        async function loadClassesForModal(cycleId) {
-            const sel = document.getElementById('add-classe');
-            sel.innerHTML = '<option value="">— Tout le cycle —</option>';
-            if (!cycleId) return;
-            try {
-                const data = await (await fetch('/api/classes?cycle_id=' + cycleId)).json();
-                data.forEach(c => sel.appendChild(new Option(c.label, c.id)));
-            } catch(e) {}
+        // ════════════════════════════════════════════════════════
+        //  SUPPRIMER une classe (version)
+        // ════════════════════════════════════════════════════════
+        async function deletePv(id, label) {
+            if(!confirm(`Supprimer "${label}" ?\nLes compétences liées seront aussi supprimées.`)) return;
+            const r = await api(`/api/admin/programme-versions/${id}/delete`, {});
+            if(r?.ok) { document.getElementById('pv-'+id)?.remove(); toast('✓ Supprimé'); }
+            else toast(r?.error||'Erreur', true);
         }
 
-        async function submitAdd(e) {
+        // ════════════════════════════════════════════════════════
+        //  MODAL PROGRAMME
+        // ════════════════════════════════════════════════════════
+        function openModalProg() {
+            document.getElementById('mprog-title').textContent = '➕ Nouveau programme';
+            document.getElementById('mprog-id').value     = '';
+            document.getElementById('mprog-annee').value  = new Date().getFullYear();
+            document.getElementById('mprog-cycle').value  = '';
+            document.getElementById('mprog-source').value = '';
+            document.getElementById('mprog-submit').textContent = 'Créer le programme';
+            openModal('modal-prog');
+        }
+        function openModalEditProg(id, annee, cycleId, source) {
+            document.getElementById('mprog-title').textContent = '✏️ Modifier le programme';
+            document.getElementById('mprog-id').value     = id;
+            document.getElementById('mprog-annee').value  = annee;
+            document.getElementById('mprog-cycle').value  = cycleId;
+            document.getElementById('mprog-source').value = source;
+            document.getElementById('mprog-submit').textContent = 'Enregistrer';
+            openModal('modal-prog');
+        }
+        async function submitProg(e) {
             e.preventDefault();
-            const form = e.target;
-            const btn  = document.getElementById('btn-add-submit');
-            btn.textContent = 'Création…';
-            btn.disabled    = true;
+            const btn    = document.getElementById('mprog-submit');
+            const editId = document.getElementById('mprog-id').value;
+            btn.disabled = true; btn.textContent = editId ? 'Enregistrement…' : 'Création…';
+            const data = {
+                annee_entree: +document.getElementById('mprog-annee').value,
+                cycle_id:     +document.getElementById('mprog-cycle').value,
+                source_url:    document.getElementById('mprog-source').value || null,
+            };
+            const url = editId ? `/api/admin/programmes/${editId}/update` : '/api/admin/programmes/create';
+            const r   = await api(url, data);
+            btn.disabled = false; btn.textContent = editId ? 'Enregistrer' : 'Créer le programme';
+            if(r?.ok) { toast(editId ? '✓ Programme modifié' : '✓ Programme créé'); closeModal('modal-prog'); setTimeout(()=>location.reload(),700); }
+            else toast(r?.error||'Erreur', true);
+        }
+        async function deleteProg(id, annee) {
+            if(!confirm(`Supprimer le programme ${annee} ?\nToutes les matières, classes et compétences associées seront supprimées.`)) return;
+            const r = await api(`/api/admin/programmes/${id}/delete`, {});
+            if(r?.ok) { document.getElementById('prog-'+id)?.remove(); toast('✓ Programme supprimé'); }
+            else toast(r?.error||'Erreur', true);
+        }
 
-            const r = await api('/api/admin/programme-versions/create', {
-                cycle_id:    form.cycle_id.value,
-                classe_id:   form.classe_id.value || null,
-                matiere_id:  form.matiere_id.value,
-                annee_entree:form.annee_entree.value,
-                label:       form.label.value,
-                notes:       form.notes.value,
-                en_vigueur:  form.en_vigueur.checked,
+        // ════════════════════════════════════════════════════════
+        //  MODAL MATIÈRE
+        // ════════════════════════════════════════════════════════
+        function openModalMat(progId) {
+            document.getElementById('mmat-title').textContent    = '📘 Nouvelle matière';
+            document.getElementById('mmat-prog-id').value        = progId;
+            document.getElementById('mmat-pm-id').value          = '';
+            document.getElementById('mmat-matiere-id').value     = '';
+            document.getElementById('mmat-label').value          = '';
+            document.getElementById('mmat-code').value           = '';
+            document.getElementById('mmat-submit').textContent   = 'Créer la matière';
+            openModal('modal-mat');
+        }
+        function openModalEditMat(pmId, matiereId, label, code) {
+            document.getElementById('mmat-title').textContent    = '✏️ Modifier la matière';
+            document.getElementById('mmat-pm-id').value          = pmId;
+            document.getElementById('mmat-matiere-id').value     = matiereId;
+            document.getElementById('mmat-label').value          = label;
+            document.getElementById('mmat-code').value           = code;
+            document.getElementById('mmat-submit').textContent   = 'Enregistrer';
+            openModal('modal-mat');
+        }
+        async function submitMat(e) {
+            e.preventDefault();
+            const btn      = document.getElementById('mmat-submit');
+            const pmId     = document.getElementById('mmat-pm-id').value;
+            const matId    = document.getElementById('mmat-matiere-id').value;
+            const progId   = document.getElementById('mmat-prog-id').value;
+            btn.disabled   = true; btn.textContent = 'Enregistrement…';
+
+            let r;
+            if(pmId) {
+                // Modification : on met à jour la matière (label + code)
+                r = await api(`/api/admin/matieres/${matId}/update`, {
+                    label: document.getElementById('mmat-label').value,
+                    code:  document.getElementById('mmat-code').value.toUpperCase(),
+                });
+            } else {
+                // Création : nouvelle matière + liaison au programme
+                r = await api('/api/admin/matieres/create', {
+                    programme_id: +progId,
+                    label: document.getElementById('mmat-label').value,
+                    code:  document.getElementById('mmat-code').value.toUpperCase(),
+                });
+            }
+
+            btn.disabled = false; btn.textContent = pmId ? 'Enregistrer' : 'Créer la matière';
+            if(r?.ok) { toast(pmId ? '✓ Matière modifiée' : '✓ Matière créée'); closeModal('modal-mat'); setTimeout(()=>location.reload(),700); }
+            else toast(r?.error||'Erreur', true);
+        }
+        async function deleteMat(pmId, label) {
+            if(!confirm(`Supprimer la matière "${label}" de ce programme ?\nSes classes et compétences seront supprimées.`)) return;
+            const r = await api(`/api/admin/programme-matieres/${pmId}/delete`, {});
+            if(r?.ok) { document.getElementById('mat-'+pmId)?.remove(); toast('✓ Matière supprimée'); }
+            else toast(r?.error||'Erreur', true);
+        }
+
+        // ════════════════════════════════════════════════════════
+        //  MODAL CLASSE
+        // ════════════════════════════════════════════════════════
+        function openModalClasse(pmId, progId, annee, cycleId) {
+            document.getElementById('mcls-pm-id').value  = pmId;
+            document.getElementById('mcls-classe').value = '';
+            document.getElementById('mcls-annee').value  = annee;
+            document.getElementById('mcls-label').value  = '';
+            document.getElementById('mcls-notes').value  = '';
+            document.getElementById('mcls-vigueur').checked = true;
+
+            // Filtrer les classes par cycle
+            document.querySelectorAll('#mcls-classe option').forEach(opt => {
+                if(!opt.value) return; // option vide
+                opt.hidden = opt.dataset.cycle && +opt.dataset.cycle !== cycleId;
             });
 
-            btn.textContent = 'Créer le programme';
-            btn.disabled    = false;
-
-            if (r?.ok) {
-                toast('✓ Programme créé — rechargement…');
-                closeModal();
-                setTimeout(() => location.reload(), 900);
-            }
+            openModal('modal-classe');
         }
-
-        // Fermer modal en cliquant sur l'overlay
-        document.getElementById('modal-add-prog').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
-        });
+        async function submitClasse(e) {
+            e.preventDefault();
+            const btn = document.getElementById('mcls-submit');
+            btn.disabled = true; btn.textContent = 'Ajout…';
+            const r = await api('/api/admin/programme-versions/create', {
+                programme_matiere_id: +document.getElementById('mcls-pm-id').value,
+                classe_id:   document.getElementById('mcls-classe').value || null,
+                annee_entree:+document.getElementById('mcls-annee').value,
+                label:        document.getElementById('mcls-label').value,
+                notes:        document.getElementById('mcls-notes').value,
+                en_vigueur:   document.getElementById('mcls-vigueur').checked,
+            });
+            btn.disabled = false; btn.textContent = 'Ajouter la classe';
+            if(r?.ok) { toast('✓ Classe ajoutée'); closeModal('modal-classe'); setTimeout(()=>location.reload(),700); }
+            else toast(r?.error||'Erreur', true);
+        }
     </script>
 
 <?php include __DIR__.'/../../partials/layout_end.php'; ?>
