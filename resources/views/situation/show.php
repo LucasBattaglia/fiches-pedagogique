@@ -256,4 +256,7 @@ include __DIR__ . '/../partials/layout_start.php';
         </div>
     </div>
 <?php endif; ?>
+
+<?php include __DIR__.'/partials/section_collaborateurs.php'; ?>
+
 <?php include __DIR__ . '/../partials/layout_end.php'; ?>

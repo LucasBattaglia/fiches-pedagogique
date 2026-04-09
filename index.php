@@ -433,62 +433,66 @@ match (true) {
 
     preg_match('#^/seance/(\d+)/show$#', $uri, $m) && $method === 'GET' => (function () use ($m) {
         $seance = \src\DAO\SeanceDAO::getInstance()->findById((int)$m[1]);
-        if (!$seance) {
-            http_response_code(404);
-            view('errors/404');
-            return;
-        }
+        if (!$seance) { http_response_code(404); view('errors/404'); return; }
         $fromSeqId = ($_GET['from_seq'] ?? '') !== '' ? (int)$_GET['from_seq'] : null;
-        $sequence = $fromSeqId ? \src\DAO\SequenceDAO::getInstance()->findById($fromSeqId) : ($seance['sequence_id'] ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']) : null);
+        $sequence = $fromSeqId
+            ? \src\DAO\SequenceDAO::getInstance()->findById($fromSeqId)
+            : ($seance['sequence_id'] ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']) : null);
         $situations = \src\DAO\SituationDAO::getInstance()->findBySeance((int)$m[1]);
         $mesSequences = [];
-        if (\src\Service\AuthService::isLoggedIn() && empty($seance['sequence_id'])) $mesSequences = \src\DAO\SequenceDAO::getInstance()->findByUser(currentUserId());
-        view('seance/show', ['seance' => $seance, 'sequence' => $sequence, 'fromSeqId' => $fromSeqId, 'situations' => $situations, 'mesSequences' => $mesSequences]);
+        if (\src\Service\AuthService::isLoggedIn() && empty($seance['sequence_id']))
+            $mesSequences = \src\DAO\SequenceDAO::getInstance()->findByUser(currentUserId());
+        $uid = currentUserId();
+        $isOwner = $uid && (int)($seance['user_id'] ?? 0) === $uid;
+        // Collaborateurs (seulement si propriétaire ou collaborateur accepté)
+        $collaborateurs = [];
+        $collabsHerites = [];
+        if ($uid && \src\DAO\SeanceCollaborateurDAO::getInstance()->canEdit((int)$m[1], $uid)) {
+            \src\DAO\SeanceCollaborateurDAO::getInstance()->ensureOwnerEntry((int)$m[1], (int)$seance['user_id']);
+            $collaborateurs  = \src\DAO\SeanceCollaborateurDAO::getInstance()->getCollaborateurs((int)$m[1]);
+            $collabsHerites  = \src\DAO\SeanceCollaborateurDAO::getInstance()->getCollaborateursHeritesDeLaSequence((int)$m[1]);
+        }
+        view('seance/show', ['seance' => $seance, 'sequence' => $sequence, 'fromSeqId' => $fromSeqId,
+            'situations' => $situations, 'mesSequences' => $mesSequences,
+            'isOwner' => $isOwner, 'collaborateurs' => $collaborateurs, 'collabsHerites' => $collabsHerites]);
     })(),
 
     preg_match('#^/seance/(\d+)/edit$#', $uri, $m) && $method === 'GET' => (function () use ($m) {
         requireLogin();
         $seance = \src\DAO\SeanceDAO::getInstance()->findById((int)$m[1]);
-        if (!$seance) {
-            http_response_code(404);
-            return;
+        if (!$seance) { http_response_code(404); return; }
+        $uid = currentUserId();
+        if (!\src\DAO\SeanceCollaborateurDAO::getInstance()->canEdit((int)$m[1], $uid)) {
+            http_response_code(403); view('errors/403'); return;
         }
         $fromSeqId = ($_GET['from_seq'] ?? '') !== '' ? (int)$_GET['from_seq'] : null;
-        $seqContext = $fromSeqId ? \src\DAO\SequenceDAO::getInstance()->findById($fromSeqId) : ($seance['sequence_id'] ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']) : null);
+        $seqContext = $fromSeqId
+            ? \src\DAO\SequenceDAO::getInstance()->findById($fromSeqId)
+            : ($seance['sequence_id'] ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']) : null);
         $dao = \src\DAO\ProgrammeDAO::getInstance();
-        view('seance/form', ['seance' => $seance, 'sequence_id' => $seqContext['id'] ?? $seance['sequence_id'], 'sequence' => $seqContext, 'fromSeqId' => $fromSeqId, 'cycles' => $dao->getCycles(), 'matieres' => $dao->getMatieres()]);
+        view('seance/form', ['seance' => $seance, 'sequence_id' => $seqContext['id'] ?? $seance['sequence_id'],
+            'sequence' => $seqContext, 'fromSeqId' => $fromSeqId,
+            'cycles' => $dao->getCycles(), 'matieres' => $dao->getMatieres()]);
     })(),
 
     // ③ CORRECTION : ownership flexible (séance autonome ou liée à une séquence)
     preg_match('#^/seance/(\d+)/update$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
         requireLogin();
-        $seance = \src\DAO\SeanceDAO::getInstance()->findById((int)$m[1]);
-        if (!$seance) {
-            http_response_code(404);
-            return;
+        $seanceId = (int)$m[1];
+        if (!\src\DAO\SeanceCollaborateurDAO::getInstance()->canEdit($seanceId, currentUserId())) {
+            http_response_code(403); return;
         }
-        // Vérification ownership : via séquence parente OU séance autonome (user_id direct)
-        $uid = currentUserId();
-        $canEdit = false;
-        if ($seance['sequence_id']) {
-            $seq = \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']);
-            $canEdit = $seq && $seq['user_id'] === $uid;
-        } else {
-            // Séance autonome : vérifier user_id sur la séance si disponible, sinon autoriser
-            $canEdit = isset($seance['user_id']) ? ((int)$seance['user_id'] === $uid) : true;
-        }
-        if (!$canEdit) {
-            http_response_code(403);
-            return;
-        }
+        $seance = \src\DAO\SeanceDAO::getInstance()->findById($seanceId);
         $data = $_POST;
         $data['duree'] = nullInt($_POST['duree'] ?? null);
         $data['deroulement'] = array_values($_POST['deroulement'] ?? []);
         $data['comportements_remediations'] = array_values($_POST['comportements_seance'] ?? []);
-        \src\DAO\SeanceDAO::getInstance()->update((int)$m[1], $data);
+        \src\DAO\SeanceDAO::getInstance()->update($seanceId, $data);
         flash('success', 'Séance mise à jour.');
-        if ($seance['sequence_id']) redirect(url('sequence/') . $seance['sequence_id']);
-        else redirect(url('seance/') . $m[1] . '/show');
+        $fromSeq = ($_POST['from_seq'] ?? '') !== '' ? (int)$_POST['from_seq'] : null;
+        if ($fromSeq) redirect(url('sequence/') . $fromSeq);
+        elseif ($seance['sequence_id']) redirect(url('sequence/') . $seance['sequence_id']);
+        else redirect(url('seance/') . $seanceId . '/show');
     })(),
 
     preg_match('#^/seance/(\d+)/attach$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
@@ -673,45 +677,22 @@ match (true) {
 
     preg_match('#^/situation/(\d+)/update$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
         requireLogin();
-        $sit = \src\DAO\SituationDAO::getInstance()->findById((int)$m[1]);
-        if (!$sit) {
-            http_response_code(404);
-            return;
-        }
-        // Ownership flexible : via séquence, via séance autonome, ou situation sans séance
-        $uid = currentUserId();
-        $canEdit = false;
-        if ($sit['seance_id']) {
-            $seance = \src\DAO\SeanceDAO::getInstance()->findById($sit['seance_id']);
-            if ($seance && $seance['sequence_id']) {
-                $seq = \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']);
-                $canEdit = $seq && $seq['user_id'] === $uid;
-            } else {
-                // Séance autonome : autoriser
-                $canEdit = true;
-            }
-        } else {
-            // Situation sans séance parente : autoriser
-            $canEdit = true;
-        }
-        if (!$canEdit) {
-            http_response_code(403);
-            return;
+        $sitId = (int)$m[1];
+        $sit   = \src\DAO\SituationDAO::getInstance()->findById($sitId);
+        if (!$sit) { http_response_code(404); return; }
+        if (!\src\DAO\SeanceCollaborateurDAO::getInstance()->canEditSituation($sitId, currentUserId())) {
+            http_response_code(403); return;
         }
         $data = $_POST;
         $data['duree'] = nullInt($_POST['duree'] ?? null);
         $data['variables_evolution'] = array_values($_POST['variables_evolution'] ?? []);
         $data['comportements_remediations'] = array_values($_POST['comportements_situation'] ?? []);
-        \src\DAO\SituationDAO::getInstance()->update((int)$m[1], $data);
+        \src\DAO\SituationDAO::getInstance()->update($sitId, $data);
         flash('success', 'Situation mise à jour.');
-        // Redirection intelligente
-        if ($sit['seance_id']) {
-            $seance = \src\DAO\SeanceDAO::getInstance()->findById($sit['seance_id']);
-            if ($seance && $seance['sequence_id']) redirect(url('sequence/') . $seance['sequence_id']);
-            else redirect(url('seance/') . $sit['seance_id'] . '/show');
-        } else {
-            redirect(url('situation/') . $m[1] . '/show');
-        }
+        $fromSeq = ($_POST['from_seq'] ?? '') !== '' ? (int)$_POST['from_seq'] : null;
+        if ($fromSeq) redirect(url('sequence/') . $fromSeq);
+        elseif ($sit['seance_id']) redirect(url('seance/') . $sit['seance_id'] . '/show');
+        else redirect(url('situation/') . $sitId . '/show');
     })(),
 
     // NOUVELLE ROUTE : rattacher une situation autonome à une séance
@@ -1204,6 +1185,115 @@ match (true) {
             flash('error', 'Erreur lors du transfert : ' . $e->getMessage());
         }
         redirect(url('sequence/') . $seqId . '#section-collaborateurs');
+    })(),
+
+    preg_match('#^/seance/invitation/([a-f0-9]{64})$#', $uri, $m) && $method === 'GET' => (function () use ($m) {
+        $token = $m[1];
+        $invitation = \src\DAO\SeanceCollaborateurDAO::getInstance()->findInvitationByToken($token);
+        view('seance/invitation', [
+            'invitation' => $invitation,
+            'token'      => $token,
+            'isLogged'   => \src\Service\AuthService::isLoggedIn(),
+        ]);
+    })(),
+
+    preg_match('#^/seance/invitation/([a-f0-9]{64})/accepter$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $ok = \src\DAO\SeanceCollaborateurDAO::getInstance()->acceptInvitation($m[1], currentUserId());
+        if ($ok) {
+            flash('success', 'Bienvenue ! Vous êtes maintenant collaborateur de cette séance.');
+            // Retrouver la séance pour rediriger
+            $inv = \src\DAO\ConnectionPool::getConnection()
+                ->prepare('SELECT seance_id FROM seance_collaborateurs WHERE user_id = :uid AND accepted_at IS NOT NULL ORDER BY accepted_at DESC LIMIT 1');
+            $inv->execute(['uid' => currentUserId()]);
+            $seanceId = $inv->fetchColumn();
+            redirect($seanceId ? url('seance/') . $seanceId . '/show' : url('dashboard'));
+        } else {
+            flash('error', 'Lien invalide ou expiré.');
+            redirect(url(''));
+        }
+    })(),
+
+    preg_match('#^/seance/(\d+)/invitation/generer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $seanceId = (int)$m[1];
+        if (!\src\DAO\SeanceCollaborateurDAO::getInstance()->isOwner($seanceId, currentUserId())) {
+            http_response_code(403); return;
+        }
+        \src\DAO\SeanceCollaborateurDAO::getInstance()->ensureOwnerEntry($seanceId, currentUserId());
+        $token = \src\DAO\SeanceCollaborateurDAO::getInstance()->createInvitation($seanceId, currentUserId());
+        flash('success', 'Lien d\'invitation généré.');
+        redirect(url('seance/') . $seanceId . '/show?invite_token=' . $token . '#section-collaborateurs');
+    })(),
+
+    preg_match('#^/seance/(\d+)/collaborateur/(\d+)/retirer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        if (!\src\DAO\SeanceCollaborateurDAO::getInstance()->isOwner((int)$m[1], currentUserId())) {
+            http_response_code(403); return;
+        }
+        \src\DAO\SeanceCollaborateurDAO::getInstance()->removeCollaborateur((int)$m[1], (int)$m[2]);
+        flash('success', 'Collaborateur retiré.');
+        redirect(url('seance/') . $m[1] . '/show#section-collaborateurs');
+    })(),
+
+    preg_match('#^/seance/(\d+)/collaborateur/(\d+)/revoquer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        if (!\src\DAO\SeanceCollaborateurDAO::getInstance()->isOwner((int)$m[1], currentUserId())) {
+            http_response_code(403); return;
+        }
+        \src\DAO\SeanceCollaborateurDAO::getInstance()->revokeInvitation((int)$m[2]);
+        flash('success', 'Invitation annulée.');
+        redirect(url('seance/') . $m[1] . '/show#section-collaborateurs');
+    })(),
+
+    preg_match('#^/situation/invitation/([a-f0-9]{64})$#', $uri, $m) && $method === 'GET' => (function () use ($m) {
+        $token = $m[1];
+        $invitation = \src\DAO\SeanceCollaborateurDAO::getInstance()->findInvitationSituationByToken($token);
+        view('situation/invitation', [
+            'invitation' => $invitation,
+            'token'      => $token,
+            'isLogged'   => \src\Service\AuthService::isLoggedIn(),
+        ]);
+    })(),
+
+    preg_match('#^/situation/invitation/([a-f0-9]{64})/accepter$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $ok = \src\DAO\SeanceCollaborateurDAO::getInstance()->acceptInvitationSituation($m[1], currentUserId());
+        if ($ok) {
+            flash('success', 'Bienvenue ! Vous collaborez maintenant sur cette situation.');
+            $inv = \src\DAO\ConnectionPool::getConnection()
+                ->prepare('SELECT situation_id FROM situation_collaborateurs WHERE user_id = :uid AND accepted_at IS NOT NULL ORDER BY accepted_at DESC LIMIT 1');
+            $inv->execute(['uid' => currentUserId()]);
+            $sitId = $inv->fetchColumn();
+            redirect($sitId ? url('situation/') . $sitId . '/show' : url('dashboard'));
+        } else {
+            flash('error', 'Lien invalide ou expiré.');
+            redirect(url(''));
+        }
+    })(),
+
+    preg_match('#^/situation/(\d+)/invitation/generer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $sitId = (int)$m[1];
+        $sit   = \src\DAO\SituationDAO::getInstance()->findById($sitId);
+        if (!$sit || (int)($sit['user_id'] ?? 0) !== currentUserId()) {
+            http_response_code(403); return;
+        }
+        \src\DAO\SeanceCollaborateurDAO::getInstance()->ensureOwnerEntrySituation($sitId, currentUserId());
+        $token = \src\DAO\SeanceCollaborateurDAO::getInstance()->createInvitationSituation($sitId, currentUserId());
+        flash('success', 'Lien d\'invitation généré.');
+        redirect(url('situation/') . $sitId . '/show?invite_token=' . $token . '#section-collaborateurs');
+    })(),
+
+    preg_match('#^/situation/(\d+)/collaborateur/(\d+)/retirer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $sit = \src\DAO\SituationDAO::getInstance()->findById((int)$m[1]);
+        if (!$sit || (int)($sit['user_id'] ?? 0) !== currentUserId()) {
+            http_response_code(403); return;
+        }
+        \src\DAO\SeanceCollaborateurDAO::getInstance()->removeCollaborateurSituation((int)$m[1], (int)$m[2]);
+        flash('success', 'Collaborateur retiré.');
+        redirect(url('situation/') . $m[1] . '/show#section-collaborateurs');
     })(),
 
     // ── 404 ───────────────────────────────────────────────────
