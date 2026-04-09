@@ -34,7 +34,7 @@
         $inviteToken = $_GET['invite_token'] ?? null;
         if ($inviteToken && $isOwner):
             $inviteUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST']
-                . $base . '/situation/invitation/' . $inviteToken;
+                    . $base . '/situation/invitation/' . $inviteToken;
             ?>
             <div class="alert alert--info" style="margin-bottom:16px">
                 <div style="flex:1">
@@ -51,7 +51,10 @@
             </div>
         <?php endif; ?>
 
+        <?php $collabsHerites = $collabsHerites ?? []; ?>
+
         <?php if (!empty($collaborateurs)): ?>
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-500);margin-bottom:8px">Membres de cette situation</div>
             <div style="display:flex;flex-direction:column;gap:8px">
                 <?php foreach ($collaborateurs as $collab): ?>
                     <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--gris-50);border-radius:var(--rayon);border:1px solid var(--gris-100)">
@@ -92,9 +95,38 @@
             </div>
         <?php else: ?>
             <p class="text-sm text-muted">
-                Aucun collaborateur.
+                Aucun collaborateur direct.
                 <?php if ($isOwner): ?>Générez un lien pour inviter des collègues.<?php endif; ?>
             </p>
+        <?php endif; ?>
+
+        <!-- Collaborateurs hérités de la séance + séquence parente -->
+        <?php if (!empty($collabsHerites)): ?>
+            <div style="border-top:1px dashed var(--gris-300);padding-top:12px;margin-top:12px">
+                <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gris-500);margin-bottom:8px">
+                    ↩ <?= count($collabsHerites) ?> collaborateur(s) hérité(s) de la séance / séquence parente
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                    <?php foreach ($collabsHerites as $collab): ?>
+                        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gris-50);border-radius:var(--rayon);border:1px dashed var(--gris-300);opacity:.85">
+                            <div style="width:30px;height:30px;border-radius:50%;background:var(--gris-500);display:flex;align-items:center;justify-content:center;color:white;font-size:.75rem;font-weight:700;flex-shrink:0;overflow:hidden">
+                                <?php if (!empty($collab['avatar_url'])): ?>
+                                    <img src="<?= htmlspecialchars($collab['avatar_url']) ?>" style="width:100%;height:100%;object-fit:cover">
+                                <?php else: ?>
+                                    <?= strtoupper(mb_substr($collab['prenom']??'?',0,1).mb_substr($collab['nom']??'',0,1)) ?>
+                                <?php endif; ?>
+                            </div>
+                            <div style="flex:1;min-width:0">
+                                <div style="font-weight:600;font-size:.85rem"><?= htmlspecialchars(($collab['prenom']??'').' '.($collab['nom']??'')) ?></div>
+                                <div class="text-sm text-muted"><?= htmlspecialchars($collab['email']??'') ?></div>
+                            </div>
+                            <span class="badge badge--gris" style="font-size:.7rem">
+                                <?= ($collab['source_heritage'] ?? '') === 'sequence' ? '↩ Séquence' : '↩ Séance' ?>
+                            </span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         <?php endif; ?>
     </div>
 </div>

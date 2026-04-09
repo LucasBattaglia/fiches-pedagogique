@@ -655,12 +655,34 @@ match (true) {
         $fromSeqId = ($_GET['from_seq'] ?? '') !== '' ? (int)$_GET['from_seq'] : null;
         $seance = $sit['seance_id'] ? \src\DAO\SeanceDAO::getInstance()->findById($sit['seance_id']) : null;
         $sequence = $fromSeqId ? \src\DAO\SequenceDAO::getInstance()->findById($fromSeqId) : (($seance && $seance['sequence_id']) ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']) : null);
-        // Pour le modal "rattacher à une séance" (situation autonome)
         $mesSeances = [];
         if (\src\Service\AuthService::isLoggedIn() && empty($sit['seance_id'])) {
             $mesSeances = \src\DAO\SeanceDAO::getInstance()->findByUser(currentUserId(), 100);
         }
-        view('situation/show', ['situation' => $sit, 'seance' => $seance, 'sequence' => $sequence, 'fromSeqId' => $fromSeqId, 'mesSeances' => $mesSeances]);
+        $uid     = currentUserId();
+        $isOwner = $uid && (int)($sit['user_id'] ?? 0) === $uid;
+        $collaborateurs = [];
+        $collabsHerites = [];
+        if ($uid) {
+            // ensure d'abord pour que canEdit trouve bien l'entrée propriétaire
+            if ($isOwner) {
+                \src\DAO\SeanceCollaborateurDAO::getInstance()->ensureOwnerEntrySituation((int)$m[1], $uid);
+            }
+            if (\src\DAO\SeanceCollaborateurDAO::getInstance()->canEditSituation((int)$m[1], $uid)) {
+                $collaborateurs = \src\DAO\SeanceCollaborateurDAO::getInstance()->getCollaborateursSituation((int)$m[1]);
+                $collabsHerites = \src\DAO\SeanceCollaborateurDAO::getInstance()->getCollaborateursHeritesDeLaSeance((int)$m[1]);
+            }
+        }
+        view('situation/show', [
+            'situation'      => $sit,
+            'seance'         => $seance,
+            'sequence'       => $sequence,
+            'fromSeqId'      => $fromSeqId,
+            'mesSeances'     => $mesSeances,
+            'isOwner'        => $isOwner,
+            'collaborateurs' => $collaborateurs,
+            'collabsHerites' => $collabsHerites,
+        ]);
     })(),
 
     preg_match('#^/situation/(\d+)/edit$#', $uri, $m) && $method === 'GET' => (function () use ($m) {

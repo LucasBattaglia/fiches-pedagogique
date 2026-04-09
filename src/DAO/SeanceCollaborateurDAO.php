@@ -296,6 +296,74 @@ class SeanceCollaborateurDAO
         )->execute(['sid' => $situationId, 'uid' => $userId]);
     }
 
+    /** Retourne les collaborateurs hérités de la séance parente ET de la séquence parente (dédupliqués) */
+    public function getCollaborateursHeritesDeLaSeance(int $situationId): array
+    {
+        $db = ConnectionPool::getConnection();
+
+        // Récupérer seance_id et sequence_id en une seule requête
+        $st = $db->prepare(
+            'SELECT sit.seance_id, sea.sequence_id
+             FROM situations sit
+             LEFT JOIN seances sea ON sea.id = sit.seance_id
+             WHERE sit.id = :id'
+        );
+        $st->execute(['id' => $situationId]);
+        $row = $st->fetch();
+        if (!$row) return [];
+
+        $seanceId   = $row['seance_id']   ? (int)$row['seance_id']   : null;
+        $sequenceId = $row['sequence_id'] ? (int)$row['sequence_id'] : null;
+
+        $results     = [];
+        $seenUserIds = [];
+
+        // 1. Collaborateurs directs de la séance parente
+        if ($seanceId) {
+            $st2 = $db->prepare('
+                SELECT sc.*, u.nom, u.prenom, u.email, u.avatar_url,
+                       \'seance\' as source_heritage
+                FROM seance_collaborateurs sc
+                LEFT JOIN users u ON sc.user_id = u.id
+                WHERE sc.seance_id = :sid AND sc.accepted_at IS NOT NULL
+                ORDER BY sc.role DESC, sc.accepted_at ASC
+            ');
+            $st2->execute(['sid' => $seanceId]);
+            foreach ($st2->fetchAll() as $c) {
+                $results[] = $c;
+                if ($c['user_id']) $seenUserIds[] = (int)$c['user_id'];
+            }
+        }
+
+        // 2. Collaborateurs de la séquence parente (dédupliqués)
+        if ($sequenceId) {
+            $st3 = $db->prepare('
+                SELECT sc.*, u.nom, u.prenom, u.email, u.avatar_url,
+                       \'sequence\' as source_heritage
+                FROM sequence_collaborateurs sc
+                LEFT JOIN users u ON sc.user_id = u.id
+                WHERE sc.sequence_id = :sid AND sc.accepted_at IS NOT NULL
+                ORDER BY sc.role DESC, sc.accepted_at ASC
+            ');
+            $st3->execute(['sid' => $sequenceId]);
+            foreach ($st3->fetchAll() as $c) {
+                if ($c['user_id'] && in_array((int)$c['user_id'], $seenUserIds, true)) continue;
+                $results[] = $c;
+                if ($c['user_id']) $seenUserIds[] = (int)$c['user_id'];
+            }
+        }
+
+        return $results;
+    }
+
+    /** Révoque une invitation situation en attente */
+    public function revokeInvitationSituation(int $rowId): void
+    {
+        ConnectionPool::getConnection()->prepare(
+            'DELETE FROM situation_collaborateurs WHERE id = :id AND accepted_at IS NULL'
+        )->execute(['id' => $rowId]);
+    }
+
     /** S'assurer que le propriétaire a une entrée dans situation_collaborateurs */
     public function ensureOwnerEntrySituation(int $situationId, int $userId): void
     {

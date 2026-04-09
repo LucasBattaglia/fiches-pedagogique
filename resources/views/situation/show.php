@@ -173,18 +173,39 @@ include __DIR__ . '/../partials/layout_start.php';
 
             <!-- COL DROITE -->
             <div style="position:sticky;top:80px;display:flex;flex-direction:column;gap:12px">
+
+                <!-- Card Actions -->
                 <div class="card">
                     <div class="card__header"><h3 class="card__titre">Actions</h3></div>
                     <div class="card__body" style="display:flex;flex-direction:column;gap:8px">
-                        <a href="<?= $base ?>/situation/<?= $situation['id'] ?>/edit?from_seq=<?= $fromSeqId ?? '' ?>" class="btn btn--outline" style="justify-content:center">✏️ Modifier</a>
+                        <?php if ($isOwner ?? false): ?>
+                            <a href="<?= $base ?>/situation/<?= $situation['id'] ?>/edit?from_seq=<?= $fromSeqId ?? '' ?>" class="btn btn--outline" style="justify-content:center">✏️ Modifier</a>
+                        <?php endif; ?>
                         <a href="<?= $base ?>/situation/<?= $situation['id'] ?>/pdf" class="btn btn--ghost" style="justify-content:center" target="_blank">📄 Exporter PDF</a>
-                        <hr style="border:none;border-top:1px solid var(--gris-300)">
-                        <form action="<?= $base ?>/situation/<?= $situation['id'] ?>/delete" method="post">
-                            <button type="submit" class="btn btn--danger btn--sm" style="width:100%;justify-content:center"
-                                    data-confirm="Supprimer cette situation ?">🗑 Supprimer</button>
-                        </form>
+
+                        <?php if (empty($situation['seance_id']) && !empty($mesSeances)): ?>
+                            <hr style="border:none;border-top:1px solid var(--gris-300)">
+                            <button class="btn btn--primary btn--sm" style="justify-content:center;width:100%"
+                                    data-modal-open="modal-attach-seance">
+                                📋 Rattacher à une séance
+                            </button>
+                        <?php elseif (empty($situation['seance_id'])): ?>
+                            <div style="background:var(--ambre-clair);border-radius:var(--rayon);padding:10px 12px;font-size:.82rem;color:var(--ambre)">
+                                🔓 Situation autonome — non rattachée à une séance
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($isOwner ?? false): ?>
+                            <hr style="border:none;border-top:1px solid var(--gris-300)">
+                            <form action="<?= $base ?>/situation/<?= $situation['id'] ?>/delete" method="post">
+                                <button type="submit" class="btn btn--danger btn--sm" style="width:100%;justify-content:center"
+                                        data-confirm="Supprimer cette situation ?">🗑 Supprimer</button>
+                            </form>
+                        <?php endif; ?>
                     </div>
                 </div>
+
+                <!-- Séance parente -->
                 <?php if (!empty($seance)): ?>
                     <div class="card">
                         <div class="card__body">
@@ -195,32 +216,16 @@ include __DIR__ . '/../partials/layout_start.php';
                         </div>
                     </div>
                 <?php endif; ?>
-            </div>
-        </div>
-    </div>
 
-    <!--
-      PATCH resources/views/situation/show.php
+            </div><!-- fin col droite -->
+        </div><!-- fin grid -->
 
-      1. Dans la colonne DROITE (card Actions), ajouter AVANT la hr du bas :
-    -->
+        <!-- Section collaborateurs (pleine largeur, sous la grille) -->
+        <?php include __DIR__.'/partials/section_collaborateurs.php'; ?>
 
-<?php if (empty($situation['seance_id']) && !empty($mesSeances)): ?>
-    <button class="btn btn--primary btn--sm" style="justify-content:center;width:100%"
-            data-modal-open="modal-attach-seance">
-        📋 Rattacher à une séance
-    </button>
-    <hr style="border:none;border-top:1px solid var(--gris-300)">
-<?php elseif (empty($situation['seance_id'])): ?>
-    <div style="background:var(--ambre-clair);border-radius:var(--rayon);padding:10px 12px;font-size:.82rem;color:var(--ambre)">
-        🔓 Situation autonome — non rattachée à une séance
-    </div>
-<?php endif; ?>
+    </div><!-- fin container -->
 
-    <!--
-      2. Avant include layout_end, ajouter le modal :
-    -->
-
+    <!-- Modal : rattacher à une séance -->
 <?php if (empty($situation['seance_id']) && !empty($mesSeances)): ?>
     <div class="modal-overlay" id="modal-attach-seance">
         <div class="modal" style="max-width:520px">
@@ -256,7 +261,5 @@ include __DIR__ . '/../partials/layout_start.php';
         </div>
     </div>
 <?php endif; ?>
-
-<?php include __DIR__.'/partials/section_collaborateurs.php'; ?>
 
 <?php include __DIR__ . '/../partials/layout_end.php'; ?>
