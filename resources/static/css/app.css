@@ -477,3 +477,537 @@ footer{background:white;border-top:1px solid var(--gris-300);padding:28px 0;text
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
+
+
+/* ============================================================
+   RESPONSIVE MOBILE — à ajouter à la fin de app.css
+   Couvre : sidebar, topbar, layout connecté, fiches, forms, tables
+   ============================================================ */
+
+/* ── Tablette (≤ 1024px) ─────────────────────────────────── */
+@media (max-width: 1024px) {
+
+  /* Sidebar rétrécie */
+  aside {
+    width: 200px !important;
+  }
+
+  /* Réduction des paddings conteneur */
+  .container {
+    padding: 0 16px;
+  }
+
+  /* Grilles de fiches : 2 colonnes max */
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+
+  /* Grille fiche 2fr/1fr → colonnes égales */
+  .fiche-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Formulaire : colonnes latérales en 3fr/1fr */
+  [style*="grid-template-columns:2fr 1fr"],
+  [style*="grid-template-columns: 2fr 1fr"] {
+    grid-template-columns: 3fr 1fr !important;
+  }
+}
+
+/* ── Mobile (≤ 768px) ────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* ── Sidebar cachée, navigation en bas d'écran ── */
+  aside {
+    display: none !important;
+  }
+
+  /* ── Layout principal pleine largeur ── */
+  div[style*="display:flex;min-height:100vh"],
+  div[style*="display: flex; min-height: 100vh"] {
+    flex-direction: column !important;
+  }
+
+  div[style*="flex:1;min-width:0;display:flex;flex-direction:column"],
+  div[style*="flex: 1; min-width: 0"] {
+    width: 100% !important;
+  }
+
+  /* ── Topbar ── */
+  div[style*="height:56px"] {
+    padding: 0 16px !important;
+  }
+
+  /* Masquer "Nouvelle séquence" dans la topbar sur très petit écran */
+  div[style*="height:56px"] .btn--primary {
+    display: none;
+  }
+
+  /* ── Page body padding réduit ── */
+  div[style*="padding:28px 28px 64px"] {
+    padding: 16px 16px 80px !important;
+  }
+
+  /* ── Conteneurs ── */
+  .container,
+  .container--sm,
+  .container--md {
+    padding: 0 14px;
+    max-width: 100%;
+  }
+
+  /* ── Typographie ── */
+  h1[style*="font-size:1.75rem"] { font-size: 1.35rem !important; }
+  h1[style*="font-size:1.8rem"]  { font-size: 1.4rem  !important; }
+  h1[style*="font-size:1.6rem"]  { font-size: 1.3rem  !important; }
+  h1[style*="font-size:2.5rem"]  { font-size: 1.8rem  !important; }
+
+  /* ── Hero ── */
+  .hero { padding: 40px 0; }
+  .hero h1 { font-size: 1.7rem; }
+  .hero p  { font-size: 1rem; }
+  .hero__actions { flex-direction: column; gap: 10px; }
+  .hero__actions .btn { justify-content: center; width: 100%; }
+
+  /* ── Cards grid → 1 colonne ── */
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ── Formulaires : form-row → 1 colonne ── */
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  /* ── Grilles fiche → 1 colonne ── */
+  .fiche-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ── Layout show/edit : grille 2fr+1fr → 1 colonne ── */
+  div[style*="display:grid;grid-template-columns:2fr 1fr"],
+  div[style*="display: grid; grid-template-columns: 2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Colonne sticky droite (actions) dépliée */
+  div[style*="position:sticky;top:80px"] {
+    position: static !important;
+  }
+
+  /* ── En-tête fiche : wrap les boutons d'action ── */
+  .fiche-header div[style*="display:flex;align-items:flex-start;justify-content:space-between"] {
+    flex-direction: column !important;
+  }
+
+  .fiche-header div[style*="display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0"] {
+    flex-wrap: wrap !important;
+    width: 100%;
+  }
+
+  .fiche-header .btn {
+    flex: 1;
+    justify-content: center;
+    min-width: 80px;
+  }
+
+  /* ── Tableaux : scroll horizontal ── */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 480px;
+  }
+
+  /* Exception : petites tables dyn-table dans les fiches */
+  .dyn-table {
+    min-width: 320px;
+  }
+
+  th, td {
+    padding: 8px 10px;
+    font-size: .82rem;
+  }
+
+  /* ── Breadcrumb compact ── */
+  .breadcrumb {
+    font-size: .75rem;
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+
+  /* ── Cards ── */
+  .card__body  { padding: 14px 16px; }
+  .card__header{ padding: 12px 16px 10px; }
+  .card__footer{ padding: 10px 16px; }
+
+  /* ── Séances list ── */
+  .seance-item {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .seance-item div[style*="display:flex;flex-direction:column"] {
+    width: 100%;
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ── Situations ── */
+  .situation-item div[style*="display:flex;align-items:center;justify-content:space-between"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+
+  /* ── Dashboard : section 2 colonnes → 1 colonne ── */
+  div[style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Stats rapides : 2 par ligne minimum ── */
+  div[style*="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* ── Filtres explorer : stack vertical ── */
+  form[action="/explorer"] div[style*="grid-template-columns:2fr 1fr 1fr auto"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Modals ── */
+  .modal {
+    max-width: 100%;
+    margin: 0;
+    border-radius: var(--rayon-lg) var(--rayon-lg) 0 0;
+    max-height: 92vh;
+  }
+
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0;
+  }
+
+  .modal__header { padding: 16px 18px; }
+  .modal__body   { padding: 16px 18px; }
+  .modal__footer { padding: 12px 18px; }
+
+  /* ── Boutons : plus grandes zones tactiles ── */
+  .btn {
+    min-height: 40px;
+  }
+
+  .btn--sm {
+    min-height: 34px;
+    padding: 5px 11px;
+  }
+
+  /* ── Inputs : taille confortable sur mobile ── */
+  input[type=text],
+  input[type=email],
+  input[type=password],
+  input[type=number],
+  select,
+  textarea {
+    font-size: 16px; /* évite le zoom auto iOS */
+  }
+
+  /* ── Programme items tree : hauteur réduite ── */
+  .prog-tree {
+    max-height: 220px;
+  }
+
+  /* ── Pagination ── */
+  .pagination {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    padding: 40px 16px;
+  }
+
+  /* ── Sections form : séances / situations ── */
+  .fiche-section__body {
+    padding: 12px 14px;
+  }
+
+  /* ── Header actions bar (top de page) ── */
+  div[style*="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+
+  /* ── Admin programmes edit_tree ── */
+  .tree-node input[type=text].input-label {
+    font-size: .85rem;
+  }
+}
+
+/* ── Navigation mobile en bas d'écran ─────────────────────── */
+/* Barre de navigation flottante pour accès rapide sur mobile  */
+@media (max-width: 768px) {
+
+  /* Création de la bottom nav */
+  body::after {
+    content: '';
+    display: block;
+    height: 68px; /* espace réservé pour la barre fixe */
+  }
+
+  .mobile-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1e3a5f;
+    border-top: 1px solid rgba(255,255,255,.12);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+    z-index: 200;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.18);
+  }
+
+  .mobile-nav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    text-decoration: none;
+    color: rgba(255,255,255,.55);
+    font-size: .65rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 8px;
+    transition: color .15s, background .15s;
+    min-width: 52px;
+  }
+
+  .mobile-nav__item:hover,
+  .mobile-nav__item--active {
+    color: white;
+    text-decoration: none;
+    background: rgba(255,255,255,.1);
+  }
+
+  .mobile-nav__item svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.8;
+  }
+
+  .mobile-nav__item--add {
+    background: #2563eb;
+    color: white !important;
+    border-radius: 14px;
+    padding: 6px 14px;
+    box-shadow: 0 2px 10px rgba(37,99,235,.5);
+  }
+
+  .mobile-nav__item--add:hover {
+    background: #1d4ed8;
+  }
+}
+
+/* ── Très petit écran (≤ 375px) ─────────────────────────── */
+@media (max-width: 375px) {
+
+  .hero h1 { font-size: 1.45rem; }
+
+  .btn {
+    font-size: .82rem;
+    padding: 8px 14px;
+  }
+
+  .badge {
+    font-size: .68rem;
+    padding: 2px 8px;
+  }
+
+  th, td {
+    padding: 6px 8px;
+    font-size: .78rem;
+  }
+
+  .card__body {
+    padding: 12px 13px;
+  }
+
+  /* Stats dashboard : 1 par ligne */
+  div[style*="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobile-nav__item {
+    font-size: .6rem;
+    padding: 4px 6px;
+    min-width: 44px;
+  }
+
+  .mobile-nav__item svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* ── Orientation paysage sur mobile ─────────────────────── */
+@media (max-width: 768px) and (orientation: landscape) {
+
+  .hero {
+    padding: 28px 0;
+  }
+
+  .hero h1 {
+    font-size: 1.4rem;
+  }
+
+  .modal {
+    max-height: 80vh;
+    border-radius: var(--rayon-lg);
+  }
+
+  .modal-overlay {
+    align-items: center !important;
+    padding: 16px;
+  }
+
+  body::after {
+    height: 56px;
+  }
+
+  .mobile-nav {
+    padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Support encoche / safe area (iPhone X+) ─────────────── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .mobile-nav {
+      padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    }
+  }
+}
+
+
+/* ── Page Programmes : transformation en cartes sur mobile ── */
+@media (max-width: 768px) {
+
+  /* Masquer le tableau, afficher les cartes */
+  .programmes-table-wrap table,
+  .programmes-table-wrap thead,
+  .programmes-table-wrap tbody,
+  .programmes-table-wrap th,
+  .programmes-table-wrap td,
+  .programmes-table-wrap tr {
+    display: block;
+  }
+
+  .programmes-table-wrap thead {
+    display: none; /* cacher les en-têtes */
+  }
+
+  .programmes-table-wrap tr {
+    background: white;
+    border: 1px solid var(--gris-300);
+    border-radius: var(--rayon);
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    min-width: unset !important;
+  }
+
+  .programmes-table-wrap td {
+    border: none;
+    padding: 4px 0;
+    font-size: .85rem;
+  }
+
+  .programmes-table-wrap td::before {
+    content: attr(data-label);
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--gris-500);
+    display: block;
+    margin-bottom: 2px;
+  }
+}
+
+/* ── Programmes : layout desktop/mobile ── */
+.prog-matiere-block {
+  border-bottom: 1px solid var(--gris-100);
+}
+.prog-matiere-block:last-child {
+  border-bottom: none;
+}
+
+.prog-matiere-titre {
+  padding: 10px 20px;
+  font-weight: 700;
+  font-size: .88rem;
+  color: var(--bleu);
+  background: var(--bleu-pale);
+  border-bottom: 1px solid var(--gris-100);
+}
+
+.prog-table-wrap {
+  overflow-x: auto;
+}
+
+.prog-table-wrap table {
+  min-width: unset;
+}
+
+/* Sur desktop : tableau visible, cartes cachées */
+.prog-cards-mobile {
+  display: none;
+}
+
+/* Sur mobile : tableau caché, cartes visibles */
+@media (max-width: 768px) {
+  .prog-table-wrap {
+    display: none;
+  }
+
+  .prog-cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .prog-card-mobile {
+    background: var(--gris-50);
+    border: 1px solid var(--gris-300);
+    border-left: 3px solid var(--bleu-med);
+    border-radius: var(--rayon);
+    padding: 12px 14px;
+  }
+
+  .prog-matiere-titre {
+    padding: 10px 14px;
+    font-size: .85rem;
+  }
+}
+
+.mobile-nav {
+  display: none;
+}
+
+/* L'afficher seulement sur mobile */
+@media (max-width: 768px) {
+  .mobile-nav {
+    display: flex;
+  }
+}

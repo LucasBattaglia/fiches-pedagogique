@@ -2,9 +2,27 @@
 $pageTitle = $sequence['titre'] ?? 'Séquence';
 $activeNav = 'seq-list';
 include __DIR__.'/../partials/layout_start.php';
-use src\Service\AuthService;
-$isOwner = AuthService::isLoggedIn() && ($sequence['user_id'] == AuthService::currentUserId());
-$isLogged = AuthService::isLoggedIn();
+$uid      = \src\Service\AuthService::currentUserId();
+$isLogged = \src\Service\AuthService::isLoggedIn();
+$isOwner  = $uid && \src\DAO\CollaborateurDAO::getInstance()->isOwner($sequence['id'], $uid);
+$canEdit  = $uid && \src\DAO\CollaborateurDAO::getInstance()->canEdit($sequence['id'], $uid);
+
+// Migration progressive
+if ($isLogged && $sequence['user_id'] == $uid) {
+    \src\DAO\CollaborateurDAO::getInstance()->ensureOwnerEntry($sequence['id'], $uid);
+}
+
+// Collaborateurs
+$collaborateurs = \src\DAO\CollaborateurDAO::getInstance()->findBySequence($sequence['id']);
+
+// Token invitation
+$inviteToken = $_GET['invite_token'] ?? null;
+if ($inviteToken) {
+    $tokenCheck = \src\DAO\CollaborateurDAO::getInstance()->findByToken($inviteToken);
+    if (!$tokenCheck || (int)$tokenCheck['sequence_id'] !== (int)$sequence['id']) {
+        $inviteToken = null;
+    }
+}
 ?>
     <div class="container container--md">
 
@@ -56,13 +74,19 @@ $isLogged = AuthService::isLoggedIn();
                 </div>
 
                 <div style="display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0">
-                    <?php if ($isOwner): ?>
+                    <?php if($canEdit) : ?>
                         <a href="/sequence/<?= $sequence['id'] ?>/edit" class="btn btn--outline btn--sm">✏️ Modifier</a>
                         <a href="/sequence/<?= $sequence['id'] ?>/pdf" class="btn btn--ghost btn--sm" target="_blank">📄 PDF</a>
-                        <form action="/sequence/<?= $sequence['id'] ?>/delete" method="post" style="display:inline">
-                            <button type="submit" class="btn btn--danger btn--sm"
-                                    data-confirm="Supprimer cette séquence et toutes ses séances/situations ?">🗑 Supprimer</button>
-                        </form>
+                        <?php if ($isOwner): ?>
+                            <form action="/sequence/<?= $sequence['id'] ?>/delete" method="post" style="display:inline">
+                                <button type="submit" class="btn btn--danger btn--sm"
+                                        data-confirm="Supprimer cette séquence et toutes ses séances/situations ?">🗑 Supprimer</button>
+                            </form>
+                        <?php else : ?>
+                            <form action="/sequence/<?= $sequence['id'] ?>/fork" method="post" style="display:inline">
+                                <button type="submit" class="btn btn--outline btn--sm">📋 Copier dans mes fiches</button>
+                            </form>
+                        <?php endif; ?>
                     <?php elseif ($isLogged): ?>
                         <form action="/sequence/<?= $sequence['id'] ?>/fork" method="post" style="display:inline">
                             <button type="submit" class="btn btn--outline btn--sm">📋 Copier dans mes fiches</button>
@@ -126,7 +150,7 @@ $isLogged = AuthService::isLoggedIn();
         <div class="fiche-section fiche-section--vert mb-24">
             <div class="fiche-section__title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
                 <span>📅 Séances (<?= count($seances) ?>)</span>
-                <?php if ($isOwner): ?>
+                <?php if ($canEdit): ?>
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                         <a href="<?= $base ?>/seance/create?sequence_id=<?= $sequence['id'] ?>" class="btn btn--vert btn--sm">+ Nouvelle séance</a>
                         <button type="button" class="btn btn--outline btn--sm" data-modal-open="modal-add-seance" style="background:white">📋 Séance existante</button>
@@ -138,7 +162,7 @@ $isLogged = AuthService::isLoggedIn();
                     <div class="empty-state" style="padding:32px">
                         <div class="empty-state__icon">📅</div>
                         <h3>Aucune séance</h3>
-                        <?php if ($isOwner): ?>
+                        <?php if ($canEdit): ?>
                             <p>Créez une nouvelle séance ou ajoutez-en une existante.</p>
                             <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
                                 <a href="<?= $base ?>/seance/create?sequence_id=<?= $sequence['id'] ?>" class="btn btn--vert btn--sm">+ Nouvelle séance</a>
@@ -163,7 +187,7 @@ $isLogged = AuthService::isLoggedIn();
                                 <?php foreach ($seances as $s): ?>
                                     <tr>
                                         <td style="text-align:center">
-                                            <?php if ($isOwner): ?>
+                                            <?php if ($canEdit): ?>
                                                 <form action="<?= $base ?>/seance/<?= $s['id'] ?>/position" method="post"
                                                       style="display:flex;align-items:center;gap:4px;justify-content:center">
                                                     <input type="hidden" name="sequence_id" value="<?= $sequence['id'] ?>">
@@ -185,7 +209,7 @@ $isLogged = AuthService::isLoggedIn();
                                         <td><?= $s['duree'] ? $s['duree'].' min' : '—' ?></td>
                                         <td><?= count($situationsBySeance[$s['id']] ?? []) ?></td>
                                         <td style="display:flex;gap:4px">
-                                            <?php if ($isOwner): ?>
+                                            <?php if ($canEdit): ?>
                                                 <a href="<?= $base ?>/seance/<?= $s['id'] ?>/show?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm" title="Voir">👁</a>
                                                 <a href="<?= $base ?>/seance/<?= $s['id'] ?>/edit?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm" title="Modifier">✏️</a>
                                                 <a href="<?= $base ?>/seance/<?= $s['id'] ?>/pdf?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm" target="_blank" title="PDF">📄</a>
@@ -214,7 +238,7 @@ $isLogged = AuthService::isLoggedIn();
                                     </div>
                                 </div>
                                 <div style="display:flex;gap:6px;flex-shrink:0">
-                                    <?php if ($isOwner): ?>
+                                    <?php if ($canEdit): ?>
                                         <a href="<?= $base ?>/seance/<?= $s['id'] ?>/show?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm" onclick="event.stopPropagation()">👁 Voir</a>
                                         <a href="<?= $base ?>/seance/<?= $s['id'] ?>/edit?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm" onclick="event.stopPropagation()">✏️</a>
                                         <a href="<?= $base ?>/seance/<?= $s['id'] ?>/pdf?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm" target="_blank" onclick="event.stopPropagation()">📄</a>
@@ -255,7 +279,7 @@ $isLogged = AuthService::isLoggedIn();
                                                             <div class="text-sm text-muted mt-8">🎯 <?= htmlspecialchars($sit['objectif_moteur']) ?></div>
                                                         <?php endif; ?>
                                                     </div>
-                                                    <?php if ($isOwner): ?>
+                                                    <?php if ($canEdit): ?>
                                                         <div style="display:flex;gap:4px">
                                                             <a href="<?= $base ?>/situation/<?= $sit['id'] ?>/show?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm">👁</a>
                                                             <a href="<?= $base ?>/situation/<?= $sit['id'] ?>/edit?from_seq=<?= $sequence['id'] ?>" class="btn btn--ghost btn--sm">✏️</a>
@@ -271,7 +295,7 @@ $isLogged = AuthService::isLoggedIn();
                                     </div>
                                 <?php endif; ?>
 
-                                <?php if ($isOwner): ?>
+                                <?php if ($canEdit): ?>
                                     <div style="margin-top:12px">
                                         <a href="/situation/create?seance_id=<?= $s['id'] ?>" class="btn btn--ambre btn--sm">+ Ajouter une situation</a>
                                     </div>
@@ -311,7 +335,7 @@ $isLogged = AuthService::isLoggedIn();
         <?php endif; ?>
 
     </div>
-<?php if ($isOwner): ?>
+<?php if ($canEdit): ?>
     <div class="modal-overlay" id="modal-add-seance">
         <div class="modal" style="max-width:620px">
             <div class="modal__header">
@@ -365,4 +389,9 @@ $isLogged = AuthService::isLoggedIn();
     </div>
 <?php endif; ?>
 
+
+<?php if ($isLogged): ?>
+    <?php $currentUserId = $uid; // ✅ AJOUT IMPORTANT
+    include __DIR__ . '/../partials/collaborateurs.php'; ?>
+<?php endif; ?>
 <?php include __DIR__.'/../partials/layout_end.php'; ?>

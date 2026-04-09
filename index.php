@@ -298,7 +298,15 @@ match (true) {
         requireLogin();
         $id = (int)$m[1];
         $seq = \src\DAO\SequenceDAO::getInstance()->findById($id);
-        if (!$seq || $seq['user_id'] !== currentUserId()) {
+        $uid = currentUserId();
+
+        $canEdit = $seq
+            && (
+                $seq['user_id'] === $uid
+                || \src\DAO\CollaborateurDAO::getInstance()->canEdit($id, $uid)
+            );
+
+        if (!$canEdit) {
             http_response_code(403);
             view('errors/403');
             return;
@@ -311,7 +319,15 @@ match (true) {
         requireLogin();
         $id = (int)$m[1];
         $seq = \src\DAO\SequenceDAO::getInstance()->findById($id);
-        if (!$seq || $seq['user_id'] !== currentUserId()) {
+        $uid = currentUserId();
+
+        $canEdit = $seq
+            && (
+                $seq['user_id'] === $uid
+                || \src\DAO\CollaborateurDAO::getInstance()->canEdit($id, $uid)
+            );
+
+        if (!$canEdit) {
             http_response_code(403);
             return;
         }
@@ -330,9 +346,28 @@ match (true) {
 
     preg_match('#^/sequence/(\d+)/delete$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
         requireLogin();
-        \src\DAO\SequenceDAO::getInstance()->delete((int)$m[1], currentUserId());
-        flash('success', 'Séquence supprimée.');
-        redirect(url('sequence/list'));
+        $id  = (int)$m[1];
+        $uid = currentUserId();
+
+        // Seul le propriétaire peut supprimer
+        if (!\src\DAO\CollaborateurDAO::getInstance()->isOwner($id, $uid)) {
+            http_response_code(403);
+            return;
+        }
+
+        // Gérer le transfert de propriété si des collaborateurs existent
+        $newOwnerId = \src\DAO\CollaborateurDAO::getInstance()->handleOwnerDeletion($id, $uid);
+
+        if ($newOwnerId) {
+            // La séquence a été transférée, pas supprimée
+            flash('success', 'La séquence a été transférée au premier collaborateur. Elle n\'a pas été supprimée.');
+            redirect(url('dashboard'));
+        } else {
+            // Suppression normale (aucun collaborateur)
+            \src\DAO\SequenceDAO::getInstance()->delete($id, $uid);
+            flash('success', 'Séquence supprimée.');
+            redirect(url('sequence/list'));
+        }
     })(),
 
     preg_match('#^/sequence/(\d+)/pdf$#', $uri, $m) && $method === 'GET' => (function () use ($m) {
@@ -343,7 +378,11 @@ match (true) {
             return;
         }
         $uid = currentUserId();
-        if (!$seq['is_public'] && $seq['user_id'] !== $uid) {
+        $canSee = $seq['is_public']
+       || $seq['user_id'] === $uid
+       || ($uid && \src\DAO\CollaborateurDAO::getInstance()->canEdit($id, $uid));
+
+if (!$canSee) {
             http_response_code(403);
             return;
         }
@@ -709,9 +748,7 @@ match (true) {
                 'cycles' => $dao->getCycles(),
                 'classes' => $dao->getAllClasses(),
             ]);
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -724,9 +761,7 @@ match (true) {
         $dao = \src\DAO\ProgrammeDAO::getInstance();
         if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
             view('admin/programmes/edit_tree', ['version' => $dao->getVersionById((int)$m[1]), 'tree' => $dao->getItemsTree((int)$m[1])]);
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -749,9 +784,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -773,9 +806,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -791,9 +822,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -819,9 +848,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -838,9 +865,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -856,9 +881,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -877,9 +900,7 @@ match (true) {
             unset($data['id']);
             \src\DAO\ProgrammeDAO::getInstance()->patchMatiere($id, $data);
             jsonResponse(['ok' => true]);
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -896,9 +917,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -922,9 +941,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -947,9 +964,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -965,9 +980,7 @@ match (true) {
             } catch (\Exception $e) {
                 jsonResponse(['ok' => false, 'error' => $e->getMessage()], 500);
             }
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -981,9 +994,7 @@ match (true) {
             $data = json_decode(file_get_contents('php://input'), true);
             $id = \src\DAO\ProgrammeDAO::getInstance()->saveItem($data);
             jsonResponse(['ok' => true, 'id' => $id]);
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
@@ -995,13 +1006,165 @@ match (true) {
         if (\src\DAO\UserDAO::getInstance()->isAdmin(currentUserId())) {
             \src\DAO\ProgrammeDAO::getInstance()->deleteItem((int)$m[1]);
             jsonResponse(['ok' => true]);
-        }
-        else
-        {
+        } else {
             http_response_code(403);
             view('errors/403');
         }
 
+    })(),
+
+
+    /**
+     * ROUTES CO-ENSEIGNEMENT — à insérer dans index.php
+     * dans le bloc match(true), après les routes existantes de séquences
+     * et AVANT le default (404).
+     *
+     * Dépendance : src\DAO\CollaborateurDAO
+     */
+
+// ── INVITATION : afficher la page d'accueil de l'invitation ─────────
+// GET /sequence/invitation/{token}
+    preg_match('#^/sequence/invitation/([a-f0-9]{64})$#', $uri, $m) && $method === 'GET' => (function () use ($m) {
+        $token = $m[1];
+        $invitation = \src\DAO\CollaborateurDAO::getInstance()->findByToken($token);
+
+        if (!$invitation) {
+            flash('error', 'Ce lien d\'invitation est invalide ou a déjà été utilisé.');
+            redirect(url(''));
+        }
+
+        view('sequence/invitation', [
+            'invitation' => $invitation,
+            'token' => $token,
+            'isLogged' => \src\Service\AuthService::isLoggedIn(),
+        ]);
+    })(),
+
+// ── INVITATION : accepter (utilisateur connecté) ─────────────────────
+// POST /sequence/invitation/{token}/accepter
+    preg_match('#^/sequence/invitation/([a-f0-9]{64})/accepter$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        $token = $m[1];
+        requireLogin();
+
+        $ok = \src\DAO\CollaborateurDAO::getInstance()->acceptInvitation($token, currentUserId());
+
+        if ($ok) {
+            // Récupérer l'ID de la séquence pour rediriger
+            $invitation = \src\DAO\CollaborateurDAO::getInstance()->findByToken($token);
+            $seqId = $invitation['sequence_id'] ?? null;
+
+            // Si le token est déjà consommé, chercher via l'entrée acceptée
+            if (!$seqId) {
+                $st = \src\DAO\ConnectionPool::getConnection()->prepare(
+                    'SELECT sequence_id FROM sequence_collaborateurs WHERE user_id = :uid ORDER BY accepted_at DESC LIMIT 1'
+                );
+                $st->execute(['uid' => currentUserId()]);
+                $seqId = $st->fetchColumn();
+            }
+
+            flash('success', 'Bienvenue dans l\'équipe ! Vous êtes maintenant collaborateur de cette séquence.');
+            redirect($seqId ? url('sequence/') . $seqId : url('dashboard'));
+        } else {
+            flash('error', 'Impossible de rejoindre : le lien est invalide ou expiré.');
+            redirect(url(''));
+        }
+    })(),
+
+// ── INVITATION : générer un lien ─────────────────────────────────────
+// POST /sequence/{id}/invitation/generer
+    preg_match('#^/sequence/(\d+)/invitation/generer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $seqId = (int)$m[1];
+
+        if (!\src\DAO\CollaborateurDAO::getInstance()->isOwner($seqId, currentUserId())) {
+            http_response_code(403);
+            return;
+        }
+
+        // S'assurer que l'entrée propriétaire existe (migration)
+        \src\DAO\CollaborateurDAO::getInstance()->ensureOwnerEntry($seqId, currentUserId());
+
+        $token = \src\DAO\CollaborateurDAO::getInstance()->createInvitation($seqId, currentUserId());
+
+        flash('success', 'Lien d\'invitation généré.');
+        redirect(url('sequence/') . $seqId . '?invite_token=' . $token . '#section-collaborateurs');
+    })(),
+
+// ── INVITATION : régénérer (invalide l'ancien) ───────────────────────
+// POST /sequence/{id}/invitation/regenerer
+    preg_match('#^/sequence/(\d+)/invitation/regenerer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $seqId = (int)$m[1];
+
+        if (!\src\DAO\CollaborateurDAO::getInstance()->isOwner($seqId, currentUserId())) {
+            http_response_code(403);
+            return;
+        }
+
+        $token = \src\DAO\CollaborateurDAO::getInstance()->createInvitation($seqId, currentUserId());
+
+        flash('success', 'Nouveau lien d\'invitation généré. L\'ancien est désormais invalide.');
+        redirect(url('sequence/') . $seqId . '?invite_token=' . $token . '#section-collaborateurs');
+    })(),
+
+// ── COLLABORATEUR : retirer un membre ────────────────────────────────
+// POST /sequence/{id}/collaborateur/{user_id}/retirer
+    preg_match('#^/sequence/(\d+)/collaborateur/(\d+)/retirer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $seqId = (int)$m[1];
+        $userId = (int)$m[2];
+
+        if (!\src\DAO\CollaborateurDAO::getInstance()->isOwner($seqId, currentUserId())) {
+            http_response_code(403);
+            return;
+        }
+
+        \src\DAO\CollaborateurDAO::getInstance()->removeCollaborateur($seqId, $userId);
+        flash('success', 'Collaborateur retiré de la séquence.');
+        redirect(url('sequence/') . $seqId . '#section-collaborateurs');
+    })(),
+
+// ── COLLABORATEUR : révoquer une invitation en attente ───────────────
+// POST /sequence/{id}/collaborateur/{collab_row_id}/revoquer
+    preg_match('#^/sequence/(\d+)/collaborateur/(\d+)/revoquer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $seqId = (int)$m[1];
+        $collabRowId = (int)$m[2];
+
+        if (!\src\DAO\CollaborateurDAO::getInstance()->isOwner($seqId, currentUserId())) {
+            http_response_code(403);
+            return;
+        }
+
+        \src\DAO\CollaborateurDAO::getInstance()->revokeInvitation($collabRowId);
+        flash('success', 'Invitation annulée.');
+        redirect(url('sequence/') . $seqId . '#section-collaborateurs');
+    })(),
+
+// ── COLLABORATEUR : transférer la propriété ──────────────────────────
+// POST /sequence/{id}/collaborateur/{user_id}/transferer
+    preg_match('#^/sequence/(\d+)/collaborateur/(\d+)/transferer$#', $uri, $m) && $method === 'POST' => (function () use ($m) {
+        requireLogin();
+        $seqId = (int)$m[1];
+        $newOwnerId = (int)$m[2];
+
+        if (!\src\DAO\CollaborateurDAO::getInstance()->isOwner($seqId, currentUserId())) {
+            http_response_code(403);
+            return;
+        }
+
+        try {
+            $ok = \src\DAO\CollaborateurDAO::getInstance()->transferOwnership($seqId, $newOwnerId, currentUserId());
+            if ($ok) {
+                flash('success', 'Propriété transférée avec succès. Vous êtes maintenant collaborateur.');
+            } else {
+                flash('error', 'Transfert impossible : cet utilisateur n\'est pas encore collaborateur accepté.');
+            }
+        } catch (\Throwable $e) {
+            flash('error', 'Erreur lors du transfert : ' . $e->getMessage());
+        }
+
+        redirect(url('sequence/') . $seqId . '#section-collaborateurs');
     })(),
 
     // ── 404 ───────────────────────────────────────────────────
