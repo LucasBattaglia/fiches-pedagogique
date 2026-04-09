@@ -65,6 +65,22 @@ $activeNav = $activeNav ?? '';
                 Mes séances
             </a>
 
+            <!--
+  PATCH layout_start.php
+
+  Ajouter ce bloc APRÈS le lien "Mes séances" dans la sidebar
+  (chercher : $activeNav==='seance-list')
+-->
+
+            <a href="<?= $base ?>/situation/list"
+               style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;color:<?= $activeNav==='situation-list'?'white':'rgba(255,255,255,.7)' ?>;background:<?= $activeNav==='situation-list'?'rgba(255,255,255,.12)':'transparent' ?>;text-decoration:none;font-size:.88rem;margin-bottom:2px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+                </svg>
+                Mes situations
+            </a>
+
             <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35);padding:16px 10px 6px">Explorer</div>
 
             <a href="<?= $base ?>/explorer"

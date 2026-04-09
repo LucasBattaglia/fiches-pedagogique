@@ -1,26 +1,40 @@
 <?php
 $pageTitle = !empty($situation['id']) ? 'Modifier la situation' : 'Nouvelle situation';
-$activeNav = 'seq-list';
+$activeNav = 'situation-list';
 $isEdit    = !empty($situation['id']);
 $sit       = $situation ?? [];
-$seance    = $seance ?? \src\DAO\SeanceDAO::getInstance()->findById((int)($sit['seance_id'] ?? $seance_id ?? 0));
-$sequence  = $seance ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id']) : [];
+
+// Résolution du contexte parent (optionnel)
+$seanceId  = (int)($sit['seance_id'] ?? $seance_id ?? $_GET['seance_id'] ?? 0);
+$seance    = $seanceId ? \src\DAO\SeanceDAO::getInstance()->findById($seanceId) : null;
+$sequence  = $seance && !empty($seance['sequence_id'])
+        ? \src\DAO\SequenceDAO::getInstance()->findById($seance['sequence_id'])
+        : null;
 $fromSeqId = $fromSeqId ?? null;
+
+$isAutonome = empty($seanceId) && empty($sit['seance_id']);
+
 include __DIR__.'/../partials/layout_start.php';
 ?>
     <div class="container container--md">
 
         <!-- Breadcrumb -->
         <div class="breadcrumb">
-            <a href="/dashboard">Tableau de bord</a>
+            <a href="<?= $base ?>/dashboard">Tableau de bord</a>
             <span class="breadcrumb__sep">›</span>
             <?php if ($sequence): ?>
-                <a href="/sequence/<?= $sequence['id'] ?>"><?= htmlspecialchars($sequence['titre']) ?></a>
+                <a href="<?= $base ?>/sequence/<?= $sequence['id'] ?>"><?= htmlspecialchars($sequence['titre']) ?></a>
                 <span class="breadcrumb__sep">›</span>
-                <a href="/seance/<?= $seance['id'] ?>/edit">Séance <?= $seance['numero'] ?></a>
+                <a href="<?= $base ?>/seance/<?= $seance['id'] ?>/show">Séance <?= $seance['numero'] ?></a>
+            <?php elseif ($seance): ?>
+                <a href="<?= $base ?>/seance/list">Mes séances</a>
                 <span class="breadcrumb__sep">›</span>
+                <a href="<?= $base ?>/seance/<?= $seance['id'] ?>/show"><?= htmlspecialchars($seance['titre']) ?></a>
+            <?php else: ?>
+                <a href="<?= $base ?>/situation/list">Mes situations</a>
             <?php endif; ?>
-            <span><?= $isEdit ? 'Modifier situation '.$sit['numero'] : 'Nouvelle situation' ?></span>
+            <span class="breadcrumb__sep">›</span>
+            <span><?= $isEdit ? 'Modifier situation '.($sit['numero'] ?? '') : 'Nouvelle situation' ?></span>
         </div>
 
         <?php if (!empty($_SESSION['flash'])): ?>
@@ -29,20 +43,36 @@ include __DIR__.'/../partials/layout_start.php';
             <?php endforeach; endforeach; unset($_SESSION['flash']); ?>
         <?php endif; ?>
 
+        <!-- En-tête -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
             <div>
                 <h1 style="font-family:var(--font-titre);font-size:1.5rem">
-                    <?= $isEdit ? 'Situation N°'.$sit['numero'].' — '.htmlspecialchars($sit['titre']) : 'Nouvelle situation' ?>
+                    <?= $isEdit ? 'Situation N°'.($sit['numero'] ?? '').' — '.htmlspecialchars($sit['titre']) : 'Nouvelle situation' ?>
                 </h1>
-                <p class="text-muted text-sm">Fiche de préparation de situation</p>
+                <p class="text-muted text-sm">
+                    Fiche de préparation de situation
+                    <?php if ($isAutonome): ?>
+                        <span class="badge badge--ambre" style="margin-left:8px">Situation autonome</span>
+                    <?php endif; ?>
+                </p>
             </div>
             <?php if ($isEdit): ?>
-                <a href="/situation/<?= $sit['id'] ?>/pdf" class="btn btn--ghost btn--sm" target="_blank">📄 PDF</a>
+                <a href="<?= $base ?>/situation/<?= $sit['id'] ?>/pdf" class="btn btn--ghost btn--sm" target="_blank">📄 PDF</a>
             <?php endif; ?>
         </div>
 
-        <form action="<?= $isEdit ? '/situation/'.$sit['id'].'/update' : '/situation/create' ?>" method="post" id="situation-form">
-            <input type="hidden" name="seance_id" value="<?= $seance['id'] ?? $seance_id ?? '' ?>">
+        <?php if ($isAutonome && !$isEdit): ?>
+            <div class="alert alert--info" style="margin-bottom:20px">
+                <div>
+                    <strong>💡 Situation autonome</strong><br>
+                    <span class="text-sm">Vous créez une situation sans séance parente. Vous pourrez la rattacher à une séance plus tard depuis la page de détail.</span>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <form action="<?= $base ?>/<?= $isEdit ? 'situation/'.$sit['id'].'/update' : 'situation/create' ?>" method="post" id="situation-form">
+            <input type="hidden" name="seance_id" value="<?= $seance ? $seance['id'] : '' ?>">
+            <input type="hidden" name="from_seq" value="<?= htmlspecialchars((string)$fromSeqId) ?>">
 
             <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start">
 
@@ -236,29 +266,50 @@ include __DIR__.'/../partials/layout_start.php';
                             <button type="submit" class="btn btn--ambre" style="justify-content:center">
                                 💾 <?= $isEdit ? 'Enregistrer' : 'Créer la situation' ?>
                             </button>
+
                             <?php if ($seance): ?>
-                                <a href="/seance/<?= $seance['id'] ?>/edit" class="btn btn--ghost" style="justify-content:center">Retour à la séance</a>
+                                <a href="<?= $base ?>/seance/<?= $seance['id'] ?>/show" class="btn btn--ghost" style="justify-content:center">
+                                    ← Retour à la séance
+                                </a>
+                            <?php else: ?>
+                                <a href="<?= $base ?>/situation/list" class="btn btn--ghost" style="justify-content:center">
+                                    ← Mes situations
+                                </a>
                             <?php endif; ?>
+
                             <?php if ($isEdit): ?>
                                 <hr style="border:none;border-top:1px solid var(--gris-300)">
-                                <a href="/situation/<?= $sit['id'] ?>/pdf" class="btn btn--outline btn--sm" target="_blank" style="justify-content:center">
+                                <a href="<?= $base ?>/situation/<?= $sit['id'] ?>/pdf" class="btn btn--outline btn--sm" target="_blank" style="justify-content:center">
                                     📄 Télécharger PDF
                                 </a>
-                                <form action="/situation/<?= $sit['id'] ?>/delete" method="post">
+                                <form action="<?= $base ?>/situation/<?= $sit['id'] ?>/delete" method="post">
                                     <button type="submit" class="btn btn--danger btn--sm" style="width:100%;justify-content:center"
                                             data-confirm="Supprimer cette situation ?">🗑 Supprimer</button>
                                 </form>
                             <?php endif; ?>
                         </div>
+
+                        <!-- Contexte parent (affiché si disponible) -->
                         <?php if ($seance): ?>
                             <div class="card__footer">
                                 <div class="text-sm text-muted mb-8">Séance parente</div>
-                                <div style="font-size:.85rem;font-weight:600">Séance <?= $seance['numero'] ?> — <?= htmlspecialchars($seance['titre']) ?></div>
+                                <div style="font-size:.85rem;font-weight:600">
+                                    Séance <?= $seance['numero'] ?> — <?= htmlspecialchars($seance['titre']) ?>
+                                </div>
                                 <?php if ($sequence): ?>
-                                    <div class="text-sm text-muted mt-8">
-                                        <a href="/sequence/<?= $sequence['id'] ?>"><?= htmlspecialchars(mb_strimwidth($sequence['titre'], 0, 40, '…')) ?></a>
+                                    <div class="text-sm text-muted" style="margin-top:6px">
+                                        <a href="<?= $base ?>/sequence/<?= $sequence['id'] ?>">
+                                            <?= htmlspecialchars(mb_strimwidth($sequence['titre'], 0, 40, '…')) ?>
+                                        </a>
                                     </div>
                                 <?php endif; ?>
+                            </div>
+                        <?php elseif (!$isEdit): ?>
+                            <div class="card__footer" style="background:var(--ambre-clair)">
+                                <div class="text-sm" style="color:var(--ambre)">
+                                    <strong>🔓 Mode autonome</strong><br>
+                                    Cette situation sera créée sans séance parente. Vous pourrez la rattacher à une séance depuis sa page de détail.
+                                </div>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -266,5 +317,6 @@ include __DIR__.'/../partials/layout_start.php';
 
             </div><!-- fin grid -->
         </form>
+
     </div>
 <?php include __DIR__.'/../partials/layout_end.php'; ?>

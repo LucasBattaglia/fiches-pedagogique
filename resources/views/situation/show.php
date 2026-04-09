@@ -198,4 +198,62 @@ include __DIR__ . '/../partials/layout_start.php';
             </div>
         </div>
     </div>
+
+    <!--
+      PATCH resources/views/situation/show.php
+
+      1. Dans la colonne DROITE (card Actions), ajouter AVANT la hr du bas :
+    -->
+
+<?php if (empty($situation['seance_id']) && !empty($mesSeances)): ?>
+    <button class="btn btn--primary btn--sm" style="justify-content:center;width:100%"
+            data-modal-open="modal-attach-seance">
+        📋 Rattacher à une séance
+    </button>
+    <hr style="border:none;border-top:1px solid var(--gris-300)">
+<?php elseif (empty($situation['seance_id'])): ?>
+    <div style="background:var(--ambre-clair);border-radius:var(--rayon);padding:10px 12px;font-size:.82rem;color:var(--ambre)">
+        🔓 Situation autonome — non rattachée à une séance
+    </div>
+<?php endif; ?>
+
+    <!--
+      2. Avant include layout_end, ajouter le modal :
+    -->
+
+<?php if (empty($situation['seance_id']) && !empty($mesSeances)): ?>
+    <div class="modal-overlay" id="modal-attach-seance">
+        <div class="modal" style="max-width:520px">
+            <div class="modal__header">
+                <h3>📋 Rattacher à une séance</h3>
+                <button class="btn btn--ghost btn--sm" data-modal-close>✕</button>
+            </div>
+            <form action="<?= $base ?>/situation/<?= $situation['id'] ?>/attach-seance" method="post">
+                <div class="modal__body">
+                    <p class="text-muted text-sm" style="margin-bottom:16px">
+                        Choisissez la séance à laquelle rattacher cette situation.<br>
+                        Elle sera positionnée en dernière position.
+                    </p>
+                    <div class="form-group">
+                        <label for="seance_id_modal">Séance <span class="required">*</span></label>
+                        <select name="seance_id" id="seance_id_modal" required>
+                            <option value="">— Sélectionner —</option>
+                            <?php foreach ($mesSeances as $ms): ?>
+                                <option value="<?= $ms['id'] ?>">
+                                    <?= htmlspecialchars($ms['titre']) ?>
+                                    <?php if (!empty($ms['sequence_titre'])): ?> (<?= htmlspecialchars(mb_strimwidth($ms['sequence_titre'], 0, 30, '…')) ?>)<?php endif; ?>
+                                    <?php if (empty($ms['sequence_id'])): ?> — Autonome<?php endif; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal__footer">
+                    <button type="button" class="btn btn--ghost" data-modal-close>Annuler</button>
+                    <button type="submit" class="btn btn--primary">Rattacher</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
 <?php include __DIR__ . '/../partials/layout_end.php'; ?>

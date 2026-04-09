@@ -1,5 +1,5 @@
 <?php
-// src/DAO/SeanceDAO.php
+// src/DAO/SeanceDAO.php  ← VERSION COMPLÈTE avec user_id autonome
 
 namespace src\DAO;
 
@@ -9,18 +9,26 @@ class SeanceDAO
     public static function getInstance(): self { if (!self::$instance) self::$instance = new self(); return self::$instance; }
 
     // sequence_id peut être NULL (séance autonome)
-    public function create(?int $sequenceId, array $data): int
+    public function create(?int $sequenceId, array $data, ?int $userId = null): int
     {
         $db  = ConnectionPool::getConnection();
         $num = $data['numero'] ?? ($sequenceId ? $this->nextNumero($sequenceId) : 1);
-        $st  = $db->prepare('
+
+        // Récupérer user_id depuis la séquence si non fourni
+        if ($userId === null && $sequenceId) {
+            $st = $db->prepare('SELECT user_id FROM sequences WHERE id = :id');
+            $st->execute(['id' => $sequenceId]);
+            $userId = (int)($st->fetchColumn() ?: 0) ?: null;
+        }
+
+        $st = $db->prepare('
             INSERT INTO seances
-              (sequence_id, numero, titre, champ_apprentissage, competence_visee, afc,
+              (sequence_id, user_id, numero, titre, champ_apprentissage, competence_visee, afc,
                objectif_general, objectif_intermediaire, duree, materiel,
                deroulement, criteres_realisation, criteres_reussite,
                variables_didactiques, comportements_remediations)
             VALUES
-              (:sequence_id, :numero, :titre, :champ_apprentissage, :competence_visee, :afc,
+              (:sequence_id, :user_id, :numero, :titre, :champ_apprentissage, :competence_visee, :afc,
                :objectif_general, :objectif_intermediaire, :duree, :materiel,
                :deroulement, :criteres_realisation, :criteres_reussite,
                :variables_didactiques, :comportements_remediations)
@@ -28,6 +36,7 @@ class SeanceDAO
         ');
         $st->execute([
             'sequence_id'              => $sequenceId,
+            'user_id'                  => $userId,
             'numero'                   => $num,
             'titre'                    => $data['titre'],
             'champ_apprentissage'      => $data['champ_apprentissage']    ?? null,
@@ -75,7 +84,27 @@ class SeanceDAO
         ]);
     }
 
-    // Attacher une séance autonome à une séquence
+    /** Vérifie si l'utilisateur est propriétaire de la séance (via user_id ou via séquence) */
+    public function isOwner(int $seanceId, int $userId): bool
+    {
+        $db = ConnectionPool::getConnection();
+        // Propriétaire direct (séance autonome ou séance avec user_id rempli)
+        $st = $db->prepare('SELECT user_id, sequence_id FROM seances WHERE id = :id');
+        $st->execute(['id' => $seanceId]);
+        $row = $st->fetch();
+        if (!$row) return false;
+
+        if ((int)($row['user_id'] ?? 0) === $userId) return true;
+
+        // Fallback via séquence parente
+        if ($row['sequence_id']) {
+            $st2 = $db->prepare('SELECT id FROM sequences WHERE id = :sid AND user_id = :uid');
+            $st2->execute(['sid' => $row['sequence_id'], 'uid' => $userId]);
+            return (bool)$st2->fetchColumn();
+        }
+        return false;
+    }
+
     public function attachToSequence(int $seanceId, int $sequenceId): void
     {
         $num = $this->nextNumero($sequenceId);
@@ -84,7 +113,6 @@ class SeanceDAO
         )->execute(['sid' => $sequenceId, 'num' => $num, 'id' => $seanceId]);
     }
 
-    // Détacher une séance de sa séquence (la rendre autonome)
     public function detachFromSequence(int $seanceId): void
     {
         ConnectionPool::getConnection()->prepare(
@@ -110,8 +138,6 @@ class SeanceDAO
 
     public function findBySequence(int $sequenceId): array
     {
-        // Utilise la table N-N sequence_seances (supporte séance dans plusieurs séquences)
-        // Fallback sur l'ancienne colonne sequence_id si la table n'existe pas encore
         try {
             $st = ConnectionPool::getConnection()->prepare('
                 SELECT s.*, ss.numero as position_in_seq
@@ -122,8 +148,6 @@ class SeanceDAO
             ');
             $st->execute(['sid' => $sequenceId]);
             $rows = $st->fetchAll();
-            // Si la table existe mais est vide pour cette séquence,
-            // on tente aussi l'ancienne colonne (migration pas encore faite)
             if (empty($rows)) {
                 $st2 = ConnectionPool::getConnection()->prepare(
                     'SELECT * FROM seances WHERE sequence_id=:sid ORDER BY numero'
@@ -133,7 +157,6 @@ class SeanceDAO
             }
             return $this->decodeRows($rows);
         } catch (\PDOException $e) {
-            // Table sequence_seances n'existe pas encore — fallback
             $st = ConnectionPool::getConnection()->prepare(
                 'SELECT * FROM seances WHERE sequence_id=:sid ORDER BY numero'
             );
@@ -142,31 +165,40 @@ class SeanceDAO
         }
     }
 
-    // Séances autonomes d'un utilisateur (sans séquence)
+    /** Toutes les séances d'un utilisateur (autonomes + liées à ses séquences) */
+    public function findByUser(int $userId, int $limit = 100): array
+    {
+        $st = ConnectionPool::getConnection()->prepare('
+            SELECT s.*,
+                   seq.titre as sequence_titre,
+                   (SELECT COUNT(*) FROM situations WHERE seance_id = s.id) as nb_situations
+            FROM seances s
+            LEFT JOIN sequences seq ON s.sequence_id = seq.id
+            WHERE s.user_id = :uid
+               OR seq.user_id = :uid2
+            GROUP BY s.id, seq.titre
+            ORDER BY s.updated_at DESC
+            LIMIT :lim
+        ');
+        $st->execute(['uid' => $userId, 'uid2' => $userId, 'lim' => $limit]);
+        return $this->decodeRows($st->fetchAll());
+    }
+
+    /** Séances autonomes (sans séquence) d'un utilisateur */
     public function findAutonomousByUser(int $userId): array
     {
         $st = ConnectionPool::getConnection()->prepare('
-            SELECT s.*
-            FROM   seances s
-            JOIN   sequences seq ON seq.user_id = :uid
-            WHERE  s.sequence_id IS NULL
-            UNION
-            SELECT s.*
-            FROM   seances s
-            WHERE  s.sequence_id IS NULL
-              AND  NOT EXISTS (SELECT 1 FROM sequences WHERE user_id = :uid2)
-            ORDER  BY updated_at DESC
+            SELECT s.*,
+                   (SELECT COUNT(*) FROM situations WHERE seance_id = s.id) as nb_situations
+            FROM seances s
+            WHERE s.sequence_id IS NULL
+              AND s.user_id = :uid
+            ORDER BY s.updated_at DESC
         ');
-        // Requête simplifiée : toutes les séances sans sequence_id
-        // (en prod on ajouterait un user_id sur seances)
-        $st2 = ConnectionPool::getConnection()->prepare(
-            'SELECT * FROM seances WHERE sequence_id IS NULL ORDER BY updated_at DESC'
-        );
-        $st2->execute();
-        return $this->decodeRows($st2->fetchAll());
+        $st->execute(['uid' => $userId]);
+        return $this->decodeRows($st->fetchAll());
     }
 
-    // Toutes les séances (pour liste globale)
     public function findAll(int $limit = 50, int $offset = 0): array
     {
         $st = ConnectionPool::getConnection()->prepare(
@@ -184,13 +216,11 @@ class SeanceDAO
     {
         $db = ConnectionPool::getConnection();
         foreach ($orderedIds as $num => $id) {
-            // Mettre à jour dans la table N-N
             try {
                 $db->prepare(
                     'UPDATE sequence_seances SET numero = :n WHERE seance_id = :id AND sequence_id = :sid'
                 )->execute(['n' => $num + 1, 'id' => $id, 'sid' => $sequenceId]);
             } catch (\PDOException $e) {}
-            // Fallback ancienne colonne
             $db->prepare('UPDATE seances SET numero=:n WHERE id=:id AND sequence_id=:sid')
                 ->execute(['n' => $num + 1, 'id' => $id, 'sid' => $sequenceId]);
         }
@@ -204,7 +234,6 @@ class SeanceDAO
                 'UPDATE sequence_seances SET numero = :pos WHERE seance_id = :sea AND sequence_id = :seq'
             )->execute(['pos' => $position, 'sea' => $seanceId, 'seq' => $sequenceId]);
         } catch (\PDOException $e) {}
-        // Fallback
         $db->prepare('UPDATE seances SET numero = :pos WHERE id = :id AND sequence_id = :sid')
             ->execute(['pos' => $position, 'id' => $seanceId, 'sid' => $sequenceId]);
     }
@@ -228,8 +257,6 @@ class SeanceDAO
         return (int)$st->fetchColumn();
     }
 
-    // ── Méthodes liaison N-N sequence_seances ──────────────
-
     public function getSequenceIds(int $seanceId): array
     {
         $st = \src\DAO\ConnectionPool::getConnection()->prepare(
@@ -242,17 +269,14 @@ class SeanceDAO
     public function linkToSequence(int $seanceId, int $sequenceId): void
     {
         $db  = ConnectionPool::getConnection();
-        // Numéro = DERNIER (ajouter à la fin)
         $st  = $db->prepare('SELECT COALESCE(MAX(numero), 0) + 1 FROM sequence_seances WHERE sequence_id = :sid');
         $st->execute(['sid' => $sequenceId]);
         $num = (int)$st->fetchColumn();
-        // Insérer dans la table N-N
         $db->prepare(
             'INSERT INTO sequence_seances (sequence_id, seance_id, numero)
              VALUES (:seq, :sea, :num)
              ON CONFLICT (sequence_id, seance_id) DO NOTHING'
         )->execute(['seq' => $sequenceId, 'sea' => $seanceId, 'num' => $num]);
-        // Mettre à jour la colonne legacy sequence_id si encore NULL
         $db->prepare(
             'UPDATE seances SET sequence_id = :seq WHERE id = :id AND sequence_id IS NULL'
         )->execute(['seq' => $sequenceId, 'id' => $seanceId]);
@@ -263,7 +287,6 @@ class SeanceDAO
         \src\DAO\ConnectionPool::getConnection()->prepare(
             'DELETE FROM sequence_seances WHERE seance_id=:sea AND sequence_id=:seq'
         )->execute(['sea' => $seanceId, 'seq' => $sequenceId]);
-        // Si c'était la séquence principale, effacer le lien direct
         \src\DAO\ConnectionPool::getConnection()->prepare(
             'UPDATE seances SET sequence_id=NULL WHERE id=:id AND sequence_id=:seq'
         )->execute(['id' => $seanceId, 'seq' => $sequenceId]);
@@ -281,5 +304,4 @@ class SeanceDAO
         $st->execute(['sid' => $sequenceId]);
         return $this->decodeRows($st->fetchAll());
     }
-
 }
